@@ -1,0 +1,41 @@
+# 环境变量（含密钥，绝不提交）
+.env
+
+# WorkBuddy 工作目录
+.workbuddy/
+
+# 前端依赖
+node_modules/
+dist/
+.nuxt/
+.output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地缓存（景点/路线/行程等数据，已在本地落盘，不提交）
+.cache/
+server/.cache/
+
+# 日志
+*.log
