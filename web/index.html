@@ -53,6 +53,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .dayc{flex:1;text-align:center;padding:11px 0;border-radius:12px;background:var(--soft);border:1px solid var(--line);font-size:14px;color:var(--tx2);cursor:pointer}
 .dayc.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:500}
 
+/* 行程页:标题栏 + 天数栏合成一块吸顶。两个各自 sticky 会互相压,合成一块才不会。 */
+.triphead{position:sticky;top:0;z-index:6;background:var(--card);box-shadow:0 3px 10px rgba(0,0,0,.05)}
+#p-trip .appbar{position:static;padding:10px 20px 4px}
+#p-trip .tabs{position:static;padding:2px 20px 10px}
+#p-trip .appbar .sub{max-height:40px;overflow:hidden;transition:max-height .18s ease,opacity .14s ease}
+.triphead.mini .appbar .sub{max-height:0;opacity:0;margin-top:0}
+.triphead.mini .appbar{padding-bottom:2px}
 .tabs{display:flex;gap:6px;padding:12px 20px 4px;position:sticky;top:0;background:var(--card);z-index:5;overflow-x:auto}
 .tabs::-webkit-scrollbar{width:0}
 .tab{padding:7px 14px;border-radius:18px;font-size:13px;color:var(--tx2);background:var(--soft);border:1px solid var(--line);white-space:nowrap;cursor:pointer;flex:none}
@@ -72,6 +79,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .card .sc{font-size:12px;color:var(--warn);background:var(--warn-soft);padding:2px 7px;border-radius:6px;flex:none;font-weight:500}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
 .tg{font-size:11px;color:var(--tx2);background:var(--soft);border:1px solid var(--line);padding:3px 8px;border-radius:6px}
+.tg.hl{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:500}
+.tg.hot{background:#fff1e8;border-color:#ffc9a8;color:#c8501a;font-weight:500}
+.hotwhy{font-size:12px;color:#c8501a;background:#fff8f3;border-left:2px solid #ffc9a8;padding:5px 8px;border-radius:0 6px 6px 0;margin-top:6px;line-height:1.5}
+.hl{font-size:12px;color:var(--brand);margin-top:8px;line-height:1.5;display:flex;align-items:flex-start;gap:5px}
+.hl:before{content:"✦";font-size:11px;margin-top:1px}
+.why{font-size:11.5px;color:var(--tx2);margin-top:7px;line-height:1.6;background:var(--soft);border-radius:9px;padding:8px 10px;border-left:3px solid var(--brand-line)}
+.why:before{content:"排布理由 · ";font-weight:600;color:var(--brand)}
+.daynote{font-size:12px;color:var(--tx1);margin-top:10px;line-height:1.6;background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px}
+.daynote:before{content:"本日思路 · ";font-weight:600;color:var(--brand)}
+.pnote{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:6px 2px 2px;padding:9px 11px;background:var(--soft);border-radius:10px;border-left:3px solid #ffc9a8}
+.pnote h3{font-size:13px;font-weight:500;margin-bottom:6px;display:flex;align-items:center}
+.pnote ul{margin:0;padding-left:16px}
+.pnote li{margin:3px 0}
+.pnote .ai.hot{background:#fff1e8;color:#c8501a;border-color:#ffc9a8}
+/* 总体思路是内容,不是标题栏的一部分 —— 放在吸顶块下面,随页面一起滚走。 */
+.psum{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:12px 20px 0;padding:9px 11px;background:var(--brand-soft);border-radius:10px;border-left:3px solid var(--brand)}
+.psum:before{content:"AI 总体思路 · ";font-weight:600;color:var(--brand)}
 .ops{display:flex;gap:8px;margin-top:11px}
 .op{flex:1;text-align:center;font-size:12px;padding:7px 0;border-radius:9px;background:var(--soft);border:1px solid var(--line);color:var(--tx2);cursor:pointer}
 .op:active{background:#E9EBE8}
@@ -120,8 +144,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 /* ---------- 城市全图页 ---------- */
 .citymapwrap{position:relative;padding:2px 16px 0}
 #cityMapBox{position:relative;width:100%;height:394px;border-radius:18px;overflow:hidden;
-  border:1px solid var(--line);background:#E8EBE8;box-shadow:0 6px 18px rgba(16,24,20,.07)}
-#cityMapBox.tmap-on{background:#DFE4E0}
+  border:1px solid var(--line);background:#8FA2AD;box-shadow:0 6px 18px rgba(16,24,20,.07)}
+#cityMapBox.tmap-on{background:#7A8E99}
 .mapfloat{position:absolute;left:26px;top:26px;z-index:3;background:rgba(255,255,255,.92);
   border:1px solid var(--line);border-radius:20px;padding:6px 13px;font-size:12px;color:var(--tx);
   box-shadow:0 2px 8px rgba(16,24,20,.08);font-weight:500}
@@ -177,10 +201,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 @keyframes spin{to{transform:rotate(360deg)}}
 .load .st{font-size:14px;font-weight:500}
 .load ol{text-align:left;margin:18px auto 0;max-width:260px}
-.load li{list-style:none;font-size:12px;color:var(--tx3);padding:7px 0;display:flex;gap:9px;align-items:center}
-.load li .k{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff}
+.load li{list-style:none;font-size:12px;color:var(--tx3);padding:7px 0;display:flex;gap:9px;align-items:center;transition:color .2s}
+.load li .k{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--tx3)}
 .load li.done{color:var(--tx2)}
-.load li.done .k{background:var(--brand);border-color:var(--brand)}
+.load li.done .k{background:var(--brand);border-color:var(--brand);color:#fff}
+/* 生成进度:进度条 + 当前动作 + 计时 */
+.ldbar{height:5px;border-radius:99px;background:var(--line);margin:16px 4px 0;overflow:hidden}
+.ldbar i{display:block;height:100%;width:0;border-radius:99px;background:var(--brand);transition:width .35s ease}
+.ldrow{display:flex;justify-content:space-between;gap:10px;margin:8px 4px 0;font-size:12px;color:var(--tx3);min-height:17px}
+.ldrow #ldDesc{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ldrow #ldPct{flex:none;color:var(--brand);font-weight:500;font-variant-numeric:tabular-nums}
+.ldtip{font-size:11px;color:var(--tx3);line-height:1.55;margin:14px 4px 0;text-align:left}
+.ldfoot{display:flex;align-items:center;justify-content:space-between;margin:14px 4px 0;font-size:11px;color:var(--tx3)}
+.ldcancel{border:1px solid var(--line);background:transparent;color:var(--tx3);font-size:11.5px;padding:5px 14px;border-radius:99px;cursor:pointer;font-family:inherit}
+.ldcancel:hover{border-color:var(--brand-line);color:var(--tx2)}
+
+/* ---------- 对话式调整计划 ---------- */
+.chatmask{position:absolute;inset:0;background:rgba(20,22,20,.42);display:none;flex-direction:column;justify-content:flex-end;z-index:30}
+.chatmask.on{display:flex}
+.chatwin{width:100%;background:var(--card);border-radius:20px 20px 0 0;display:flex;flex-direction:column;max-height:82%;animation:up .22s ease}
+.chathd{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line);flex:none}
+.chathd h2{font-size:16px;font-weight:500;flex:1}
+.chathd .x{width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--tx2);font-size:15px;line-height:28px;text-align:center;cursor:pointer;flex:none}
+.chathd .sub{font-size:11.5px;color:var(--tx3);margin-top:2px}
+.chatlog{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:86%;font-size:13.5px;line-height:1.6;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:5px}
+.msg.ai{align-self:flex-start;background:var(--soft);color:var(--tx);border-bottom-left-radius:5px}
+.msg.sys{align-self:center;background:transparent;color:var(--tx3);font-size:11.5px;padding:2px 0}
+.msg .diff{display:block;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:var(--tx2)}
+.chatquick{display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 12px;flex:none}
+.chatquick .q{font-size:12px;padding:6px 11px;border-radius:14px;background:var(--soft);color:var(--tx2);cursor:pointer;border:1px solid var(--line)}
+.chatquick .q:active{background:var(--brand-line)}
+.chatin{flex:none;display:flex;gap:9px;padding:12px 18px 18px;border-top:1px solid var(--line);align-items:flex-end}
+.chatin textarea{flex:1;border:1px solid var(--line);border-radius:18px;padding:10px 13px;font-size:13.5px;font-family:inherit;resize:none;background:var(--card);color:var(--tx);line-height:1.5;max-height:96px;min-height:38px}
+.chatin textarea:focus{outline:none;border-color:var(--brand-line)}
+.chatin .send{padding:0 16px;height:38px;border:none;border-radius:19px;background:var(--brand);color:#fff;font-size:13px;cursor:pointer;flex:none}
+.chatin .send:disabled{opacity:.45;cursor:default}
 .load li.cur .k{border-color:var(--brand)}
 
 .note{width:290px;flex:none;font-size:13px;line-height:1.75;color:var(--tx2);padding-top:8px}
@@ -198,7 +255,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 <body>
 <div class="stage">
 <div class="phone">
-  <div class="status"><span>9:41</span><span class="rt"><i></i><i></i><i></i></span></div>
+  <div class="status"><span id="clock">--:--</span><span class="rt"><i></i><i></i><i></i></span></div>
   <div class="body">
 
     <section id="p-home" class="page on">
@@ -225,12 +282,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
         <div><h1 id="cityMapTitle">成都</h1><div class="sub" id="cityMapSub">全城景点 · 三维实景</div></div>
         <span class="badge" id="cityBadge">示例数据</span>
       </div>
-      <div class="citymapwrap">
+          <div class="citymapwrap">
         <div id="cityMapBox"></div>
         <div class="mapfloat" id="cityCount" style="display:none"></div>
         <div class="mapctl float" id="cityViewCtl" style="display:none">
-          <div class="chip on" data-v="3d">三维</div>
-          <div class="chip" data-v="2d">俯视</div>
+          <div class="chip on" data-v="2d">俯视</div>
           <div class="chip" data-v="rot">转 30°</div>
           <div class="chip on" data-b="sat">卫星</div>
           <div class="chip" data-b="vec">街道</div>
@@ -261,16 +317,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
     </section>
 
     <section id="p-trip" class="page">
-      <div class="appbar">
-        <div><h1 id="tripTitle">成都 · 3 天</h1><div class="sub" id="tripSub"></div></div>
-        <span class="badge" id="srcBadge">示例数据</span>
+      <!-- 标题栏和天数栏是同一个吸顶块:之前两者各自 sticky top:0,
+           下滑时天数栏会浮上来盖住标题栏里的「AI 总体思路」。 -->
+      <div class="triphead" id="tripHead">
+        <div class="appbar">
+          <div><h1 id="tripTitle">成都 · 3 天</h1><div class="sub" id="tripSub"></div></div>
+          <span class="badge" id="srcBadge">示例数据</span>
+        </div>
+        <div class="tabs" id="dayTabs"></div>
       </div>
-      <div class="tabs" id="dayTabs"></div>
       <div class="sum" id="daySum"></div>
       <div class="tip" id="aiTip"></div>
       <div class="tl" id="timeline"></div>
       <div class="foot">
         <button class="btn" style="background:var(--soft);color:var(--tx);border:1px solid var(--line)" onclick="openAdd()">+ 加个地方</button>
+        <button class="btn" id="chatBtn" style="background:var(--soft);color:var(--tx);border:1px solid var(--line)" onclick="openChat()">调整计划</button>
         <button class="btn" style="background:var(--soft);color:var(--tx);border:1px solid var(--line)" onclick="regen()">重新生成</button>
       </div>
     </section>
@@ -284,8 +345,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
           <div class="chip" data-mode="city">全城景点</div>
         </div>
         <div class="mapctl" id="mapCtl" style="display:none">
-          <div class="chip on" data-pitch="55">三维</div>
-          <div class="chip" data-pitch="0">俯视</div>
+          <div class="chip on" data-pitch="0">俯视</div>
           <div class="chip on" data-b="sat">卫星</div>
           <div class="chip" data-b="vec">街道</div>
         </div>
@@ -310,11 +370,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   </nav>
 
   <div class="mask" id="m-load"><div class="sheet"><div class="load">
-    <div class="sp"></div><div class="st" id="ldTitle">正在规划</div>
+    <div class="sp"></div>
+    <div class="st" id="ldTitle">正在规划</div>
+    <div class="ldbar"><i id="ldBar"></i></div>
+    <div class="ldrow"><span id="ldDesc">正在连接后端…</span><span id="ldPct">0%</span></div>
     <ol id="ldSteps"></ol>
+    <div class="ldtip">首次生成要联网检索景点、AI 编排顺序、逐段算通勤时间,通常需要 20~40 秒</div>
+    <div class="ldfoot">
+      <span id="ldTimer"></span>
+      <button class="ldcancel" onclick="cancelPlan()">取消</button>
+    </div>
   </div></div></div>
 
   <div class="mask" id="m-sheet" onclick="if(event.target===this)closeSheet()"><div class="sheet" id="sheetBox"></div></div>
+
+  <!-- 对话式调整计划:用户提意见,AI 在真实候选池内重排行程 -->
+  <div class="chatmask" id="m-chat" onclick="if(event.target===this)closeChat()">
+    <div class="chatwin">
+      <div class="chathd">
+        <div style="flex:1">
+          <h2>调整计划</h2>
+          <div class="sub" id="chatSub">说说你的想法,我按意见重排</div>
+        </div>
+        <div class="x" onclick="closeChat()">×</div>
+      </div>
+      <div class="chatlog" id="chatLog"></div>
+      <div class="chatquick" id="chatQuick"></div>
+      <div class="chatin">
+        <textarea id="chatIn" rows="1" placeholder="例如:第二天太赶了,少排一个;我想多看人文,换掉一个拍照的点"></textarea>
+        <button class="send" id="chatSend">发送</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <aside class="note">
@@ -552,7 +639,30 @@ function transit(a,b){
   return {mode:d>15?'驾车':'地铁',min:Math.round(10+d/21*60)};
 }
 function hhmm(m){var h=Math.floor(m/60),x=Math.round(m%60);return (h<10?'0':'')+h+':'+(x<10?'0':'')+x}
+// 大模型返回的文本要经过转义再拼进 innerHTML —— 提示词写得再严,也不能假定它不会吐出尖括号
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function dur(m){var h=Math.floor(m/60),x=m%60;return h?(h+' 小时'+(x?' '+x+' 分':'')):(x+' 分钟')}
+
+/* ---------- 状态栏时钟 ----------
+ * 原来这里写死 "9:41"(苹果发布会的演示时间),跟真实时间无关。
+ * 现在显示北京时间,不论本机时区如何 —— 行程是按当地时间算的,
+ * 出行时看的就是北京时间,这里的秒针/分针必须和行程时间轴同一套时间。
+ * 用 Intl 按 Asia/Shanghai 取,而不是 getHours()(那是本机时区)。 */
+function beijingNow(){
+  try{
+    return new Intl.DateTimeFormat('zh-CN',{
+      timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
+  }catch(e){
+    // 极端情况下 Intl 不可用:退到 UTC+8 手工换算
+    var d=new Date(),t=8*60+d.getUTCHours()*60+d.getUTCMinutes();
+    t=((t%1440)+1440)%1440;
+    return (t<600?'0':'')+Math.floor(t/60)+':'+(t%60<10?'0':'')+(t%60);
+  }
+}
+function tickClock(){
+  var el=$('clock');
+  if(el)el.textContent=beijingNow();
+}
 
 /* ---------- 编排:偏好打分 → 按天地理聚类 → 天内最近邻 ---------- */
 function buildPlan(city,days,prefs,pace){
@@ -777,7 +887,16 @@ function renderTrip(){
   $('daySum').innerHTML=
     '<div class="sumc"><div class="k">游玩</div><div class="v">'+Math.floor(play/60)+' 小时</div></div>'+
     '<div class="sumc"><div class="k">结束时间</div><div class="v">'+hhmm(tl.end)+'</div></div>'+
-    '<div class="sumc"><div class="k">门票合计</div><div class="v">'+(cost?'¥'+cost:'免费')+'</div></div>';
+    '<div class="sumc"><div class="k">门票合计</div><div class="v">'+(cost?'¥'+cost:'免费')+'</div></div>'+
+    (day.note?'<div class="daynote">本日思路:'+day.note+'</div>':'');
+
+  // 行程整体思路(AI 综合考量后的总纲),存在才显示,避免重复插入。
+  // 必须插在吸顶块**外面**:放在标题栏里的话,下滑时会被浮上来的天数栏压住。
+  var sumEl=document.getElementById('planSummary');
+  if(!sumEl){sumEl=document.createElement('div');sumEl.id='planSummary';sumEl.className='psum';
+    $('tripHead').insertAdjacentElement('afterend',sumEl);}
+  sumEl.textContent=plan.summary||'';
+  sumEl.style.display=plan.summary?'block':'none';
 
   var tips=(plan.advice&&plan.advice.length)?plan.advice:advice(plan);
   // 说清楚建议是谁写的。以前不管有没有模型都挂着 "AI",看的人会以为接了大模型其实没有。
@@ -786,6 +905,20 @@ function renderTrip(){
     '<span style="font-size:11px;font-weight:400;color:var(--tx3);margin-left:6px">'+
     (byModel?'大模型生成':'没接后端 · 本地规则')+'</span></h3><ul>'+
     tips.map(function(s){return '<li>'+s+'</li>'}).join('')+'</ul>';
+
+  // 联网检索到了、但地图上核不到具体地点的当下热点。
+  // 只当线索列出,不进池、不进行程 —— 真实性没过验证的东西不给它位置。
+  var hn=(plan.hot_notes&&plan.hot_notes.length)?plan.hot_notes:[];
+  var hnEl=document.getElementById('hotNotes');
+  if(!hnEl){hnEl=document.createElement('div');hnEl.id='hotNotes';$('aiTip').insertAdjacentElement('afterend',hnEl)}
+  if(hn.length){
+    hnEl.className='pnote';
+    hnEl.innerHTML='<h3><span class="ai hot">联网线索</span>'+
+      '<span style="font-size:11px;font-weight:400;color:var(--tx3);margin-left:6px">'+
+      '地图上没核到确切位置,未排进行程</span></h3><ul>'+
+      hn.map(function(x){return '<li><b>'+esc(x.name)+'</b> · '+esc(x.why)+'</li>'}).join('')+'</ul>';
+    hnEl.style.display='block';
+  }else{hnEl.style.display='none'}
 
   var box=$('timeline'),idx=0;box.innerHTML='';
   tl.nodes.forEach(function(n){
@@ -801,12 +934,21 @@ function renderTrip(){
       box.appendChild(m);return;
     }
     idx++;
+    var bt=n.poi.best_time_label||'';
+    var hl=n.poi.highlight||'';
+    // 当下热点:联网核实地图上确有其地才打这个标。hot_why 是模型给的理由,属外部文本,转义后再插
+    var hotTag=n.poi.hot?'<span class="tg hot">当下热点</span>':'';
+    var hotWhy=(n.poi.hot&&n.poi.hot_why)?'<div class="hotwhy">'+esc(n.poi.hot_why)+'</div>':'';
     var c=document.createElement('div');c.className='node';
-    c.innerHTML='<div class="dot">'+idx+'</div><div class="stamp">'+hhmm(n.arrive)+' – '+hhmm(n.leave)+' · 停留 '+dur(n.poi.duration)+'</div>'+
+    c.innerHTML='<div class="dot">'+idx+'</div><div class="stamp">'+hhmm(n.arrive)+' – '+hhmm(n.leave)+' · 停留 '+dur(n.poi.duration)+(bt?' · '+bt:'')+'</div>'+
       '<div class="card"><div class="hd"><div class="nm">'+n.poi.name+'</div><div class="sc">'+n.poi.rating.toFixed(1)+'</div></div>'+
       '<div class="meta"><span class="tg">'+n.poi.type+'</span><span class="tg">'+(n.poi.cost?'人均 ¥'+n.poi.cost:'免费')+'</span>'+
       n.poi.tags.slice(0,2).map(function(x){return '<span class="tg">'+x+'</span>'}).join('')+
-      (n.poi.indoor?'<span class="tg">室内</span>':'')+'</div>'+
+      (n.poi.indoor?'<span class="tg">室内</span>':'')+
+      hotTag+(bt?'<span class="tg hl">'+bt+'</span>':'')+'</div>'+
+      (hl?'<div class="hl">'+hl+'</div>':'')+
+      hotWhy+
+      (n.why?'<div class="why">为何这样排:'+n.why+'</div>':'')+
       '<div class="ops"><div class="op" data-a="swap">换一个</div><div class="op del" data-a="del">删除</div></div></div>';
     var order=idx-1;
     c.querySelectorAll('.op').forEach(function(b){
@@ -965,7 +1107,7 @@ function initMap3D(items){
   MAP.map=new TMap.Map('mapBox',{
     center:new TMap.LatLng(items[0].lat,items[0].lng),
     zoom:14,
-    pitch:60,                 // 俯仰角:卫星影像倾斜后才有俯瞰感
+    pitch:0,                  // 默认垂直俯视
     rotation:0,
     showControl:false,
     baseMap:baseMapSpec(S.base)
@@ -1073,7 +1215,7 @@ function renderMap(){
       if(MAP.ready)buildLayers(items); else initMap3D(items);
       $('mapSub').textContent=cityMode
         ? '灰针是全城候选 · 绿点是第 '+day.day+' 天'
-        : (S.base==='sat'?'卫星实景 · 点标记可查看名称':'三维街道 · 点标记可查看名称');
+        : (S.base==='sat'?'卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称');
       $('mapHint').textContent='';
       $('mapCtl').style.display='flex';
       $('mapModeCtl').style.display='flex';
@@ -1153,7 +1295,8 @@ function writeCityCache(city,pois){
  * (大模型建议跟着行程一起缓存,这部分是最贵的)。编辑过的行程会刷新时间戳。 */
 var PLAN_KEY='tm_plan';
 function planSig(){
-  return [S.city,S.days,S.prefs.slice().sort().join(','),S.pace].join('|');
+  // 末尾带规划引擎版本:AI 综合规划(v2)与前规则版缓存不互通,避免旧行程被直接复用
+  return [S.city,S.days,S.prefs.slice().sort().join(','),S.pace,'v2'].join('|');
 }
 function savePlan(){
   if(!S.plan)return;
@@ -1174,7 +1317,7 @@ function restorePlan(){
     var o=JSON.parse(localStorage.getItem(PLAN_KEY));
     if(o&&o.sig){
       var parts=o.sig.split('|');
-      if(parts.length===4){
+      if(parts.length===5){
         var c=parts[0];
         S.city=(RAW[c]||CITY_FLAT.indexOf(c)>=0)?c:S.city;
         S.days=Math.max(1,Math.min(5,parseInt(parts[1])||3));
@@ -1251,24 +1394,29 @@ function renderCity(){
   renderCityOpts();
   renderTypeFilter();
   var items=shownPois();
-  $('cityMapSub').innerHTML=(items.length?('全城 '+items.length+' 个景点 · '+(S.base==='sat'?'卫星实景':'三维街道')):'暂无这座城的数据')+
+  $('cityMapSub').innerHTML=(items.length?('全城 '+items.length+' 个景点 · '+(S.base==='sat'?'卫星实景':'交通图')):'暂无这座城的数据')+
     ' · <span style="color:var(--brand);cursor:pointer" onclick="go(\'home\')">换城市</span>';
   renderCityList(items);
   if(!items.length){renderCityEmpty();return}
   // 优先:MapLibre 真三维地形(山凸起/沟凹陷);失败回退腾讯平面卫星;再失败手绘示意图
-  loadMapLibre(function(mlOk){
-    if(mlOk){
-      try{
-        if(CMAP.ready&&CMAP.eng==='ml'&&CMAP.map)refreshTerrain(items); else initCityTerrain(items);
-        afterCityMap(items); return;
-      }catch(e){ mapLog('MapLibre 地形初始化抛错:'+e.message); }
-    }
+  function fallbackTMap(){
     loadTMap(function(ok){
       if(!ok){cityMapFallback(items);return}
       try{
         if(CMAP.ready&&CMAP.eng==='tmap'&&CMAP.map)buildCityLayers(items); else initCityMap(items);
         afterCityMap(items);
       }catch(e){ mapLog('全城地图初始化抛错:'+e.message); cityMapFallback(items); }
+    });
+  }
+  loadMapLibre(function(mlOk){
+    if(!mlOk){fallbackTMap();return}
+    // 先拿城市边界,再初始化真三维地形(边界外会被遮罩盖住,只显示城市块)
+    loadBoundary(S.city,function(geo){
+      try{
+        if(CMAP.ready&&CMAP.eng==='ml'&&CMAP.map)refreshTerrain(items,geo); else initCityTerrain(items,geo);
+        afterCityMap(items); return;
+      }catch(e){ mapLog('MapLibre 地形初始化抛错:'+e.message); }
+      fallbackTMap();
     });
   });
 }
@@ -1279,6 +1427,7 @@ function planCount(){
 function initCityMap(items){
   var p=items[0];
   mapLog('创建地图实例,底图='+S.base+',点位 '+items.length+' 个');
+  var box=$('cityMapBox'); if(box)box.innerHTML='';   // 同上,清残留
   CMAP.map=new TMap.Map('cityMapBox',{
     center:new TMap.LatLng(p.lat,p.lng),
     zoom:12,
@@ -1359,6 +1508,22 @@ function gcj02ToWgs84(lat,lng){
   dLng=(dLng*180)/((a/sq)*Math.cos(radLat)*pi);
   return {lat:lat-dLat,lng:lng-dLng};
 }
+/* 加载城市行政边界 GeoJSON(后端缓存 30 天)。
+ * 失败也不阻塞,地图会退化成完整世界底图。 */
+function loadBoundary(city,cb){
+  if(!API||API.indexOf('http')!==0){cb(null);return}
+  // v2:修复了高德 district 把"西安"误匹配成吉林"西安区"的 bug,旧缓存一律失效
+  var key='tm_boundary_v2_'+city;
+  try{ var hit=localStorage.getItem(key); if(hit){ cb(JSON.parse(hit)); return; } }catch(e){}
+  fetch(API+'/api/boundary?city='+encodeURIComponent(city),{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null})
+    .then(function(d){
+      var geo=d&&d.boundary?d.boundary:null;
+      if(geo){ try{localStorage.setItem(key,JSON.stringify(geo))}catch(e){} }
+      cb(geo);
+    }).catch(function(){cb(null)});
+}
+
 /* 从后端 /vendor 本地加载 MapLibre。
  * 注意:内置预览的 CSP 只允许腾讯脚本,直接 <script src> 会被拦。
  * 故用 fetch 把文件拉回(connect 允许 127.0.0.1:*)再内联注入(unsafe-inline 允许),
@@ -1388,9 +1553,141 @@ function loadMapLibre(cb){
     })
     .catch(function(e){ mapLog('MapLibre 内联失败('+e.message+'),改标签方式'); viaTag(); });
 }
+/* 构造城市边界反向遮罩:一个覆盖全世界的大矩形,城市边界作为 hole。
+ * 这样 MapLibre 只会显示城市边界内的卫星/地形,市外被背景色盖住。
+ * geo: 高德 district 接口返回的 GeoJSON Feature(MultiPolygon)。
+ * 像重庆、舟山这类有飞地/离岛的城市,严格边界会得到多个分散的洞,视觉上"拆分"成几块;
+ * 此时用 buildLinks() 在拆分的部分之间画浅色细线,让它们读起来仍是一座城市。
+ * 海边群岛不再用半透明填充,避免把海面盖成一片难看的色块。 */
+function makeMaskPolygon(geo){
+  if(!geo||!geo.geometry)return null;
+  var world=[[[-180,-90],[180,-90],[180,90],[-180,90],[-180,-90]]];
+  var holes=[];
+  var coords=geo.geometry.coordinates;
+  var polys=geo.geometry.type==='MultiPolygon'?coords:[coords];
+  polys.forEach(function(poly){ poly.forEach(function(ring){ holes.push(ring); }); });
+  return {type:'Polygon',coordinates:world.concat(holes)};
+}
+/* 把城市边界拆成「地块」(每个外环一个),用于识别被分开的飞地/离岛。
+ * 返回:[[ [lng,lat], ... ], ...] 每个元素是一个外环。 */
+function cityParts(geo){
+  if(!geo||!geo.geometry)return [];
+  var coords=geo.geometry.coordinates;
+  var polys=geo.geometry.type==='MultiPolygon'?coords:[coords];
+  return polys.map(function(poly){ return poly[0]; }); // 只取外环
+}
+function dist2(a,b){ var dx=a[0]-b[0],dy=a[1]-b[1]; return dx*dx+dy*dy; }
+function ringCentroid(r){
+  var x=0,y=0,n=0;
+  for(var i=0;i<r.length;i++){x+=r[i][0];y+=r[i][1];n++;}
+  return [x/n,y/n];
+}
+function ringArea2(r){ // 用鞋带公式算面积(绝对值),用于挑主体地块
+  var s=0,n=r.length;
+  for(var i=0,j=n-1;i<n;j=i++){
+    s+=(r[j][0]*r[i][1]-r[i][0]*r[j][1]);
+  }
+  return Math.abs(s)/2;
+}
+/* 两环最近距离的平方(抽样以降低开销) */
+function ringMinDist2(r1,r2){
+  var best=Infinity,step1=Math.max(1,Math.ceil(r1.length/200)),step2=Math.max(1,Math.ceil(r2.length/200));
+  for(var i=0;i<r1.length;i+=step1){
+    for(var j=0;j<r2.length;j+=step2){
+      var d=dist2(r1[i],r2[j]); if(d<best)best=d;
+    }
+  }
+  return best;
+}
+/* 找两环最近的一对点 */
+function closestPoints(r1,r2){
+  var step1=Math.max(1,Math.ceil(r1.length/200)),step2=Math.max(1,Math.ceil(r2.length/200));
+  var pa=r1[0],pb=r2[0],bd=Infinity;
+  for(var i=0;i<r1.length;i+=step1){
+    for(var j=0;j<r2.length;j+=step2){
+      var d=dist2(r1[i],r2[j]); if(d<bd){bd=d;pa=r1[i];pb=r2[j];}
+    }
+  }
+  return [pa,pb];
+}
+/* 由两点生成一条「浅色连接线」(LineString)。
+ * 不再用填充多边形:海边/群岛城市连接过多小岛时,半透明填充会把海面盖成一片难看的色块。
+ * 细实线既能"串"起被分开的城区,又不会遮住卫星/海面。 */
+function linkLine(pa,pb){
+  return {type:'LineString',coordinates:[pa,pb]};
+}
+/* 为被分开的城市飞地/离岛生成浅色连接线 FeatureCollection。
+ * 思路:先按边界间距把各地块并成「连通块」,主体=面积最大的块;
+ * 其余每个块连到主体最近的地块;距离太远(>MAX_LINK_DEG)的小岛/飞地不再硬连,
+ * 避免海边群岛被拉出一堆跨海长线。用细线连接,不覆盖海面。 */
+function buildLinks(geo){
+  var MAX_LINK_DEG=0.035; // 约 3-4km,超过就不连
+  var parts=cityParts(geo);
+  if(parts.length<2)return {type:'FeatureCollection',features:[]};
+  var EPS2=0.002*0.002; // 约 200m 内视为相连
+  // 并查集归并连通块
+  var parent=parts.map(function(_,i){return i;});
+  function find(x){ while(parent[x]!==x){parent[x]=parent[parent[x]];x=parent[x];} return x; }
+  function uni(a,b){ parent[find(a)]=find(b); }
+  for(var i=0;i<parts.length;i++){
+    for(var j=i+1;j<parts.length;j++){
+      if(ringMinDist2(parts[i],parts[j])<EPS2) uni(i,j);
+    }
+  }
+  // 按连通块分组
+  var groups={};
+  parts.forEach(function(p,idx){ var g=find(idx); (groups[g]=groups[g]||[]).push(idx); });
+  var keys=Object.keys(groups);
+  if(keys.length<2)return {type:'FeatureCollection',features:[]}; // 其实是连成一片的
+  // 挑主体块(含面积最大的那个地块的块)
+  var mainG=null,mainArea=-1;
+  keys.forEach(function(g){
+    var a=groups[g].reduce(function(s,idx){return s+ringArea2(parts[idx]);},0);
+    if(a>mainArea){mainArea=a;mainG=g;}
+  });
+  var feats=[];
+  keys.forEach(function(g){
+    if(g===mainG)return;
+    // 小于主体 2% 的地块基本是海上小岛/礁石:连过去只会在海面上拉出一条
+    // 没有意义的线,直接跳过,海面保持干净。
+    var gArea=groups[g].reduce(function(s,idx){return s+ringArea2(parts[idx]);},0);
+    if(gArea<mainArea*0.02)return;
+    // 找该块到主体块最近的一对地块
+    var bestD=Infinity,bestA=null,bestB=null;
+    groups[g].forEach(function(idx){
+      groups[mainG].forEach(function(midx){
+        var d=ringMinDist2(parts[idx],parts[midx]);
+        if(d<bestD){bestD=d;bestA=parts[idx];bestB=parts[midx];}
+      });
+    });
+    if(bestA&&bestB){
+      var cp=closestPoints(bestA,bestB);
+      var dDeg=Math.sqrt(dist2(cp[0],cp[1]));
+      if(dDeg<=MAX_LINK_DEG){
+        feats.push({type:'Feature',properties:{},geometry:linkLine(cp[0],cp[1])});
+      }
+    }
+  });
+  return {type:'FeatureCollection',features:feats};
+}
+function boundaryBbox(geo){
+  if(!geo||!geo.geometry)return null;
+  var minLng=180,maxLng=-180,minLat=90,maxLat=-90;
+  var coords=geo.geometry.coordinates;
+  var polys=geo.geometry.type==='MultiPolygon'?coords:[coords];
+  polys.forEach(function(poly){
+    poly[0].forEach(function(p){
+      minLng=Math.min(minLng,p[0]); maxLng=Math.max(maxLng,p[0]);
+      minLat=Math.min(minLat,p[1]); maxLat=Math.max(maxLat,p[1]);
+    });
+  });
+  return [[minLng,minLat],[maxLng,maxLat]];
+}
+
 /* 底图+高程样式。卫星底图:天地图(合规,需 tk)优先,无 tk 用 Esri 卫星(境外,个人可视化)。
- * 高程: AWS Terrarium(境外,非白名单)——白名单内无 setTerrain 可用高程,个人可视化引入,可替换。 */
-function terrainStyle(){
+ * 高程: AWS Terrarium(境外,非白名单)——白名单内无 setTerrain 可用高程,个人可视化引入,可替换。
+ * geo: 城市边界,用于生成反向遮罩,让地图只显示城市块。 */
+function terrainStyle(geo){
   var satTiles;
   if(TIANDITU_TK){
     var tk=TIANDITU_TK;
@@ -1401,36 +1698,119 @@ function terrainStyle(){
   }else{
     satTiles=['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
   }
-  return {
-    version:8,
-    sources:{
-      sat:{type:'raster',tiles:satTiles,tileSize:256,maxzoom:18},
-      dem:{type:'raster-dem',tiles:[DEM_SRC],encoding:'terrarium',tileSize:256,maxzoom:DEM_MAXZOOM}
-    },
-    layers:[
-      {id:'sat',type:'raster',source:'sat'},
-      {id:'hill',type:'hillshade',source:'dem',
-        paint:{'hillshade-exaggeration':0.55,'hillshade-shadow-color':'#2b1d12',
-               'hillshade-highlight-color':'#fff7e6','hillshade-accent-color':'#5a3d22'}}
-    ]
+  // 街道底图:高德路网(GCJ-02),与下方实时路况同一坐标系,叠加后道路与路况对齐。
+  // 默认隐藏,点「街道」时由 setMLBase 切出;路网上再叠高德实时路况即为「交通图」。
+  var streetTiles=[
+    'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    'https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    'https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    'https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+  ];
+  // 实时路况:高德 trafficengine(透明底,彩色路况线),叠在路网之上;GCJ-02,与路网一致。
+  var trafficTiles=['https://tm.amap.com/trafficengine/mapabc/traffictile?v=1.0&t=1&x={x}&y={y}&z={z}'];
+  var sources={
+    sat:{type:'raster',tiles:satTiles,tileSize:256,maxzoom:18},
+    street:{type:'raster',tiles:streetTiles,tileSize:256,maxzoom:18},
+    traffic:{type:'raster',tiles:trafficTiles,tileSize:256,maxzoom:18},
+    dem:{type:'raster-dem',tiles:[DEM_SRC],encoding:'terrarium',tileSize:256,maxzoom:DEM_MAXZOOM}
   };
+  var layers=[
+    {id:'sat',type:'raster',source:'sat'},
+    // 街道层放在 hillshade 之下:街道瓦片加载成功时,hillshade 会在街道上叠出立体明暗;
+    // 若街道瓦片加载失败(网络受限),卫星层仍可见,不会出现透明空洞。
+    {id:'street',type:'raster',source:'street',layout:{'visibility':'none'}},
+    {id:'hill',type:'hillshade',source:'dem',
+      paint:{'hillshade-exaggeration':0.55,'hillshade-shadow-color':'#2b1d12',
+             'hillshade-highlight-color':'#fff7e6','hillshade-accent-color':'#5a3d22'}},
+    // 实时路况:叠在路网与山影之上,彩色线表示拥堵程度(绿畅/黄缓/红堵)
+    {id:'traffic',type:'raster',source:'traffic',layout:{'visibility':'none'}}
+  ];
+  if(geo){
+    // 始终用真实行政边界(精确模式):市外遮罩盖住,市内显示地形
+    var maskGeo=makeMaskPolygon(geo);
+    sources.mask={type:'geojson',data:{type:'Feature',properties:{},geometry:maskGeo}};
+    sources.boundary={type:'geojson',data:geo};
+    // 边界外遮罩:与页面背景色一致(浅色主题 #F7F6F2),盖住市外卫星影像
+    layers.push({id:'mask',type:'fill',source:'mask',
+      paint:{'fill-color':'#F7F6F2','fill-opacity':1}});
+    // 被分开的飞地/离岛之间,用浅色细线把城市"串"起来(画在遮罩之上)。
+    // 全部不透明:半透明色块压在海面上会变成难看的色块(见截图),
+    // 细实线既能"串"起被分开的城区,又完全不遮挡卫星/海面。
+    var links=buildLinks(geo);
+    if(links&&links.features.length){
+      sources.link={type:'geojson',data:links};
+      layers.push({id:'link-line',type:'line',source:'link',
+        paint:{'line-color':'#E9A98C','line-width':2.5,'line-opacity':1}});
+    }
+    // 城市边界描边,让城市块轮廓更明显
+    layers.push({id:'boundary-line',type:'line',source:'boundary',
+      paint:{'line-color':'#E07A5F','line-width':1.6,'line-opacity':1}});
+  }
+  return {version:8,sources:sources,layers:layers};
 }
-function initCityTerrain(items){
-  mapLog('创建 MapLibre 真三维地形,底图='+S.base+' 点位 '+items.length);
+function initCityTerrain(items,geo){
+  mapLog('创建 MapLibre 真三维地形,底图='+S.base+',点位 '+items.length+',边界='+(geo?'有':'无'));
+  // 先安全销毁旧地图,保留 boundary/geo 用于重绘
+  var savedBoundary=geo;
+  try{if(CMAP.map)CMAP.map.destroy()}catch(e){}
+  CMAP={map:null,marker:null,label:null,info:null,ready:false,eng:null,introDone:false,rot:0,_markers:[],_popup:null,boundary:savedBoundary};
+  var box=$('cityMapBox'); if(box)box.innerHTML='';   // 清掉上一座城市/兜底示意图残留的 canvas/SVG,避免透明时透出旧地图
+  var bbox=boundaryBbox(geo);
   var c=items[0],cc=gcj02ToWgs84(c.lat,c.lng);
-  CMAP.eng='ml'; CMAP._markers=[];
+  CMAP.eng='ml'; CMAP._markers=[]; CMAP.boundary=geo;
   CMAP.map=new maplibregl.Map({
     container:'cityMapBox',
-    style:terrainStyle(),
-    center:[cc.lng,cc.lat], zoom:11, pitch:55, bearing:0, attributionControl:false, antialias:true
+    style:terrainStyle(geo),
+    center:bbox?[(bbox[0][0]+bbox[1][0])/2,(bbox[0][1]+bbox[1][1])/2]:[cc.lng,cc.lat],
+    zoom:bbox?9:11,
+    pitch:0, bearing:0,      // 默认垂直俯视,一目了然看到城市块形状
+    attributionControl:false, antialias:true
   });
   CMAP.map.on('error',function(e){mapLog('MapLibre 错误:'+((e&&e.error&&e.error.message)||e&&e.message||''))});
   CMAP.map.on('load',function(){
     try{CMAP.map.setTerrain({source:'dem',exaggeration:TERRAIN_EXAG})}catch(e){mapLog('setTerrain 失败:'+e.message)}
-    if(S.base!=='sat'){try{CMAP.map.setLayoutProperty('sat','visibility','none')}catch(e){}}
+    try{setMLBase(S.base)}catch(e){}
     addTerrainMarkers(items);
-    fitTerrain(items);
-    spinOnceML(CMAP.map,CMAP);
+    fitTerrain(items,geo);
+    // 监听底图瓦片加载状态,失败时给出提示/fallback
+    ['sat','street','dem'].forEach(function(sid){
+      try{
+        var src=CMAP.map.getSource(sid);
+        if(src){
+          if(src.on)src.on('error',function(err){mapLog('瓦片源 '+sid+' 加载失败:'+(err&&err.error&&err.error.message||''));});
+          if(src.off)src.off('error',function(){});
+        }
+      }catch(e){}
+    });
+    var tileChecks=0;
+    CMAP.map.on('data',function(e){
+      if(e&&e.sourceId==='sat'&&e.sourceDataType==='metadata'){
+        mapLog('卫星瓦片源已就绪');
+      }
+      if(e&&e.sourceId==='sat'&&e.tile&&e.tile.state==='loaded'){
+        tileChecks++;
+        if(tileChecks<=3)mapLog('卫星瓦片已加载 '+tileChecks+' 张');
+      }
+    });
+    // 6秒后如果卫星源仍没进入 loaded,可能是网络/CSP 问题
+    setTimeout(function(){
+      try{
+        var src=CMAP.map.getSource('sat');
+        var loaded=(src&&typeof src.loaded==='function')?src.loaded():false;
+        if(!loaded){
+          mapLog('卫星瓦片加载未完成(网络慢或被拦截)');
+          // 自动尝试切换到街道底图(若可用)
+          if(S.base==='sat'){
+            toast('卫星底图加载较慢,尝试显示街道底图');
+            S.base='vec'; setMLBase('vec');
+            $('cityViewCtl').querySelectorAll('.chip[data-b]').forEach(function(x){x.classList.remove('on')});
+            var bchip=$('cityViewCtl').querySelector('.chip[data-b="vec"]');
+            if(bchip)bchip.classList.add('on');
+          }
+        }
+      }catch(e){}
+    },6000);
+    // 默认垂直俯视,不做进场自转(已无三维倾斜选项)
   });
   CMAP.ready=true;
   $('cityMapBox').classList.add('tmap-on');
@@ -1445,31 +1825,66 @@ function addTerrainMarkers(items){
   clearTerrainMarkers();
   CMAP._popup=CMAP._popup||new maplibregl.Popup({offset:16,closeButton:false,closeOnClick:true});
   items.forEach(function(p){
-    var w=gcj02ToWgs84(p.lat,p.lng);
+    var w=gcj02ToWgs84(p.lat,p.lng); // WGS-84(卫星/地形底图用)
     var col=inPlan(p)?'#0F7A57':tcolor(p.type);
     var el=document.createElement('div');
     el.innerHTML='<svg width="20" height="26" viewBox="0 0 20 26"><path d="M10 25C10 25 19 15 19 9C19 4 15 1 10 1C5 1 1 4 1 9C1 15 10 25 10 25Z" fill="'+col+'" stroke="#fff" stroke-width="2"/><circle cx="10" cy="9" r="3" fill="#fff"/></svg>';
     el.style.cssText='cursor:pointer;width:20px;height:26px';
     var mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([w.lng,w.lat]).addTo(CMAP.map);
+    mk._gcj=[p.lng,p.lat];          // 高德 GCJ-02(街道/交通底图用)
+    mk._wgs=[w.lng,w.lat];          // WGS-84(卫星/地形底图用)
     el.addEventListener('click',function(ev){ev.stopPropagation();
-      CMAP._popup.setLngLat([w.lng,w.lat]).setHTML(
+      CMAP._popup.setLngLat(mk.getLngLat()).setHTML(
         '<div style="padding:5px 8px;font-size:12.5px;line-height:1.5">'+
         '<b>'+p.name+'</b><br><span style="color:#676B65">'+p.type+' · '+Number(p.rating).toFixed(1)+' 分 · '+(p.cost?'人均 ¥'+p.cost:'免费')+'</span></div>')
         .addTo(CMAP.map);
     });
     CMAP._markers.push(mk);
   });
+  setMarkerFrame(S.base==='sat'?'wgs':'gcj'); // 按当前底图坐标系校正标记位置(load 时 setMLBase 早于标记创建)
 }
-function fitTerrain(items){
-  if(!CMAP.map||!items.length)return;
+/* 切换底图坐标系:卫星/地形用 WGS-84,街道/交通(高德)用 GCJ-02,保证标记与底图对齐 */
+function setMarkerFrame(frame){
+  if(!CMAP._markers)return;
+  CMAP._markers.forEach(function(mk){
+    var c=frame==='gcj'?mk._gcj:mk._wgs;
+    if(c)try{mk.setLngLat(c)}catch(e){}
+  });
+}
+function fitTerrain(items,geo){
+  if(!CMAP.map)return;
+  // 有城市边界时优先 fit 到边界,保证城市块完整显示在屏幕里
+  var bbox=boundaryBbox(geo);
+  if(bbox){
+    CMAP.map.fitBounds(bbox,{padding:60,maxZoom:11});
+    return;
+  }
+  if(!items.length)return;
   var b=new maplibregl.LngLatBounds();
   items.forEach(function(p){var w=gcj02ToWgs84(p.lat,p.lng);b.extend([w.lng,w.lat]);});
   CMAP.map.fitBounds(b,{padding:70,maxZoom:13});
 }
-function refreshTerrain(items){ addTerrainMarkers(items); fitTerrain(items); }
+function refreshTerrain(items,geo){ addTerrainMarkers(items); fitTerrain(items,geo); }
 function setMLBase(b){
   if(!CMAP.map)return;
-  try{ if(CMAP.map.getLayer('sat'))CMAP.map.setLayoutProperty('sat','visibility',b==='sat'?'visible':'none'); }catch(e){}
+  try{
+    // 点「卫星」= 纯卫星影像 + 立体山影,标记用 WGS-84 坐标;
+    // 点「街道」= 高德路网 + 实时路况(交通图),高德系 GCJ-02,标记同步切到 GCJ-02 以对齐。
+    if(CMAP.map.getLayer('sat')){
+      CMAP.map.setLayoutProperty('sat','visibility','visible');
+      CMAP.map.setPaintProperty('sat','raster-opacity',b==='sat'?1:0.25); // 街道模式下留一层淡淡卫星衬底
+    }
+    if(CMAP.map.getLayer('street')){
+      CMAP.map.setLayoutProperty('street','visibility',b==='sat'?'none':'visible');
+    }
+    if(CMAP.map.getLayer('traffic')){
+      CMAP.map.setLayoutProperty('traffic','visibility',b==='sat'?'none':'visible');
+    }
+    if(CMAP.map.getLayer('hill')){
+      CMAP.map.setPaintProperty('hill','hillshade-exaggeration',b==='sat'?0.55:0.3);
+    }
+    setMarkerFrame(b==='sat'?'wgs':'gcj'); // 卫星=WGS-84,街道/交通=GCJ-02,与各自底图对齐
+  }catch(e){}
 }
 function spinOnceML(map,fh){
   if(!map||!map.setBearing)return;
@@ -1488,8 +1903,8 @@ function afterCityMap(items){
     (S.typeFilter?' · '+S.typeFilter:'')+(S.plan?' · 已排 '+planCount():'');
   $('cityViewCtl').style.display='flex';
   var txt=CMAP.eng==='ml'
-    ? ('真三维地形 · '+(S.base==='sat'?'卫星俯瞰':'地形晕渲'))
-    : (S.base==='sat'?'卫星实景':'三维街道');
+    ? ('真三维地形 · '+(S.base==='sat'?'卫星俯瞰':'交通图'))
+    : (S.base==='sat'?'卫星实景':'街道');
   $('cityMapSub').innerHTML='全城 '+items.length+' 个景点 · '+txt+
     ' · <span style="color:var(--brand);cursor:pointer" onclick="go(\'home\')">换城市</span>';
 }
@@ -1499,6 +1914,7 @@ function cityMapFallback(items){
   $('cityMapBox').classList.remove('tmap-on');
   $('cityCount').style.display='none';
   $('cityViewCtl').style.display='none';
+  var box=$('cityMapBox'); if(box)box.innerHTML='';   // 清残留,避免和示意图叠在一起
   renderSchematic(items,'cityMapBox');
   var p=$('cityMapBox').parentNode;
   var old=p.querySelector('.maphint');if(old)old.parentNode.removeChild(old);
@@ -1560,8 +1976,10 @@ function poiRow(p){
     '</div><div class="sc">'+Number(p.rating||0).toFixed(1)+'</div></div>'+
     '<div class="meta"><span class="tg" style="background:'+c+';border-color:'+c+';color:#fff">'+p.type+'</span>'+
     '<span class="tg">停留 '+dur(p.duration)+'</span>'+
+    (p.best_time_label?'<span class="tg hl">'+p.best_time_label+'</span>':'')+
     '<span class="tg">'+(p.cost?'人均 ¥'+p.cost:'免费')+'</span>'+
-    (p.indoor?'<span class="tg">室内</span>':'')+'</div>';
+    (p.indoor?'<span class="tg">室内</span>':'')+'</div>'+
+    (p.highlight?'<div class="hl">'+p.highlight+'</div>':'');
   e.onclick=function(){
     if(!CMAP.map){toast('地图还没加载好');return}
     CMAP.map.setCenter(new TMap.LatLng(p.lat,p.lng));
@@ -1619,6 +2037,80 @@ function openAdd(){
 /* 换城市:回到选择页。城市列表在首页,不弹层 */
 function openCity(){go('home')}
 function closeSheet(){$('m-sheet').classList.remove('on')}
+
+/* ---------- 对话式调整计划 ----------
+ * 用户用大白话提意见,后端让大模型在真实候选池内重排,返回「回复 + 新行程」。
+ * 前端只负责:把意见发出去、把回复显示出来、把新行程接管(并像手动编辑一样同步后端)。
+ * 没接后端时给出明确提示,而不是让用户对着一个没反应的输入框。 */
+var CHAT_BUSY=false;
+var CHAT_SUGGEST=['太赶了,每天少排一个','我想多看人文,换掉一个拍照的点',
+  '第二天不想爬山,换成室内/平地','把最好看的夜景放最后一天','孩子小,节奏再松一点'];
+function chatLog(txt,who,html){
+  var d=document.createElement('div');
+  d.className='msg '+(who||'ai');
+  if(html)d.innerHTML=html;else d.textContent=txt;
+  $('chatLog').appendChild(d);
+  $('chatLog').scrollTop=$('chatLog').scrollHeight;
+  return d;
+}
+function openChat(){
+  if(!S.plan){toast('先生成行程');return}
+  $('chatLog').innerHTML='';
+  chatLog('现在的安排:\n'+S.plan.days.map(function(d){
+    return '第'+d.day+'天 '+(d.items||[]).map(function(p){return p.name}).join(' → ');
+  }).join('\n'),'sys');
+  chatLog('说说哪里不满意?比如「太赶了」「想多看人文」「第二天不想爬山」。我会按你的意见重排,行程里的景点只会从真实候选里挑。','ai');
+  $('chatQuick').innerHTML=CHAT_SUGGEST.map(function(s){
+    return '<div class="q">'+s+'</div>'}).join('');
+  $('chatQuick').querySelectorAll('.q').forEach(function(q){
+    q.onclick=function(){$('chatIn').value=q.textContent;$('chatIn').focus()};
+  });
+  $('chatIn').value='';
+  $('m-chat').classList.add('on');
+  setTimeout(function(){$('chatIn').focus()},260);
+}
+function closeChat(){$('m-chat').classList.remove('on')}
+function sendChat(){
+  if(CHAT_BUSY)return;
+  var msg=($('chatIn').value||'').trim();
+  if(!msg)return;
+  chatLog(msg,'me');$('chatIn').value='';
+  // 先把用户的话显示出来,再判断能不能改 —— 否则没接后端时用户发了消息却毫无反应
+  if(!API){chatLog('还没连上后端,现在只能看不能改。启动 server 后再试:\ncd server && uvicorn app:app --reload','ai');return}
+  var before=S.plan.days.map(function(d){return (d.items||[]).map(function(p){return p.name}).join(' → ')});
+  CHAT_BUSY=true;$('chatSend').disabled=true;
+  var wait=chatLog('正在按你的意见重排…','ai');
+  fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({city:S.plan.city,days:S.plan.days,message:msg,pace:S.plan.pace,prefs:S.prefs})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      wait.remove();
+      if(!d||!d.plan){chatLog('没能按这条意见重排('+(d&&d.detail||'请求失败')+')。可以换个说法再试。','ai');return}
+      // 新行程接管。注意:不要走 recalc() —— 它会用前端估算的通勤时间
+      // 重算时间轴,把后端用真实接口算出的时间和"为何这样排"覆盖掉。
+      // 后端返回的 days 已经带完整 timeline,直接用。
+      d.plan.pool=(d.plan.pool&&d.plan.pool.length)?d.plan.pool:(S.plan.pool||[]);
+      S.plan=d.plan;S.di=0;
+      savePlan();renderTrip();if(mapOn())renderMap();
+      var after=S.plan.days.map(function(x){return (x.items||[]).map(function(p){return p.name}).join(' → ')});
+      var diff='<span class="diff">'+before.map(function(b,i){
+        return '第'+(i+1)+'天 '+b+(after[i]&&after[i]!==b?' → <b>'+after[i]+'</b>':(after[i]?'':' → (已清空)'));
+      }).join('<br>')+'</span>';
+      chatLog(d.reply||'已按你的意见重排。','ai',(d.reply||'已按你的意见重排。')+diff);
+      if(!d.by_model)chatLog('提示:这次是本地规则兜底,没接大模型,只能做很粗的调整。','sys');
+    })
+    .catch(function(){wait.remove();chatLog('网络出错了,稍后再试。','ai')})
+    .then(function(){CHAT_BUSY=false;$('chatSend').disabled=false});
+}
+/* 发送按钮 + 回车发送(Shift+Enter 换行)+ 输入框随内容长高 */
+$('chatSend').onclick=sendChat;
+$('chatIn').addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}
+});
+$('chatIn').addEventListener('input',function(){
+  this.style.height='auto';
+  this.style.height=Math.min(96,this.scrollHeight)+'px';
+});
 function toast(s){
   var t=document.createElement('div');
   t.style.cssText='position:absolute;left:50%;bottom:96px;transform:translateX(-50%);background:rgba(24,26,23,.9);color:#fff;font-size:13px;padding:9px 16px;border-radius:10px;z-index:40;white-space:nowrap';
@@ -1626,42 +2118,168 @@ function toast(s){
   setTimeout(function(){t.remove()},1800);
 }
 function cityLabel(){return RAW[S.city]?RAW[S.city].name:S.city}
-var STEPS=['检索 '+cityLabel()+' 的真实景点','计算站间通勤时间','编排顺序并生成建议'];
+/* ---------- 生成行程:加载界面 + 真实进度 ----------
+ * 以前这里是 setInterval 假跑三步(约 2.3 秒)就把遮罩关掉,真正的请求才开始。
+ * 而这一次请求要走:候选池多轮关键词搜索(可能撞上限流退避)/ 联网检索热点 /
+ * 大模型编排(还可能重试一次)/ 逐段路径规划 —— 实测 20~40 秒。于是用户看到的是
+ * "加载条一闪而过,然后行程页干等半分钟,期间不知道是卡了还是慢"。
+ *
+ * 现在:遮罩由后端推送的真实进度(阶段 + 百分比 + 说明)驱动,直到行程数据到手、
+ * 页面渲染完毕才撤遮罩。所以不存在"先跳到计划界面再慢慢填充"。
+ */
+var PLAN_STAGES=[
+  {k:'pool', t:'检索真实景点'},
+  {k:'hot',  t:'检索当下热点'},
+  {k:'ai',   t:'AI 综合编排行程'},
+  {k:'route',t:'计算站间通勤时间'},
+  {k:'save', t:'生成每日安排'}
+];
+var _ld={timer:null,t0:0,pct:0,stage:-1,abort:null,cancel:false};
+
+function _stageIx(k){
+  for(var i=0;i<PLAN_STAGES.length;i++)if(PLAN_STAGES[i].k===k)return i;
+  return -1;
+}
+function planStage(k){
+  var lis=$('ldSteps').querySelectorAll('li'),j;
+  if(k==='done'){
+    for(j=0;j<lis.length;j++)lis[j].className='done';
+    _ld.stage=PLAN_STAGES.length;return;
+  }
+  var ix=_stageIx(k);
+  if(ix<0||ix<=_ld.stage)return;      // 只许前进:后端偶发的乱序不该让界面往回跳
+  for(j=0;j<lis.length;j++)lis[j].className=(j<ix?'done':(j===ix?'cur':''));
+  _ld.stage=ix;
+}
+function planProgress(ev){
+  if(_ld.cancel)return;
+  var pct=Math.round((Number(ev.pct)||0)*100);
+  if(pct<_ld.pct)pct=_ld.pct;         // 进度条同理,只增不减
+  _ld.pct=pct;
+  $('ldBar').style.width=pct+'%';
+  $('ldPct').textContent=pct+'%';
+  if(ev.detail)$('ldDesc').textContent=ev.detail;
+  if(ev.stage)planStage(ev.stage);
+}
+function hideLoad(){
+  clearInterval(_ld.timer);_ld.timer=null;
+  $('m-load').classList.remove('on');
+}
+function cancelPlan(){
+  if(_ld.cancel)return;
+  _ld.cancel=true;hideLoad();
+  if(_ld.abort){try{_ld.abort.abort()}catch(e){}}
+  _ld.abort=null;
+  toast('已取消,行程保持原样');
+}
 function startPlan(fresh){
   S.planFresh=!!fresh;
-  $('ldSteps').innerHTML=['检索候选景点','计算站间通勤时间','编排顺序并生成建议'].map(function(s,i){
-    return '<li data-i="'+i+'"><span class="k">'+(i+1)+'</span>'+s+'</li>'}).join('');
+  _ld={timer:null,t0:Date.now(),pct:0,stage:-1,abort:null,cancel:false};
+  $('ldSteps').innerHTML=PLAN_STAGES.map(function(s,i){
+    return '<li><span class="k">'+(i+1)+'</span>'+s.t+'</li>'}).join('');
   $('ldTitle').textContent='正在规划 '+cityLabel();
+  $('ldBar').style.width='0%';
+  $('ldPct').textContent='0%';
+  $('ldDesc').textContent=API?'正在连接后端…':'读取内置示例数据';
+  $('ldTimer').textContent='';
   $('m-load').classList.add('on');
-  var i=0,li=$('ldSteps').querySelectorAll('li');
-  var timer=setInterval(function(){
-    if(i>0)li[i-1].className='done';
-    if(i>=STEPS.length){
-      clearInterval(timer);
-      setTimeout(function(){$('m-load').classList.remove('on');finish()},420);
-      return;
-    }
-    li[i].className='cur';i++;
-  },620);
+  _ld.timer=setInterval(function(){
+    if(_ld.t0)$('ldTimer').textContent='已用 '+Math.round((Date.now()-_ld.t0)/1000)+' 秒';
+  },1000);
+  finish();
+}
+function _planBody(){
+  return JSON.stringify({city:cityLabel(),days:S.days,prefs:S.prefs,
+                         pace:S.pace,fresh:!!S.planFresh});
 }
 function enter(){$('tabbar').classList.remove('hide');S.di=0;savePlan();go('trip')}
 function localPlan(){S.plan=buildPlan(S.city,S.days,S.prefs,S.pace);enter()}
 function finish(){
-  if(!API){localPlan();return}
+  if(_ld.cancel)return;
+  if(!API){                                   // 无后端:示例数据也要走一遍反馈
+    planProgress({stage:'save',detail:'读取内置示例数据',pct:.5});
+    setTimeout(function(){
+      if(_ld.cancel)return;
+      planProgress({stage:'done',detail:'行程已就绪',pct:1});
+      try{localPlan()}catch(e){toast('示例数据生成失败');}
+      hideLoad();
+    },380);
+    return;
+  }
+  _ld.abort=new AbortController();
+  fetch(API+'/api/plan_stream',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:_planBody(),signal:_ld.abort.signal})
+    .then(function(r){
+      if(!r.ok)throw 0;
+      if(!r.body||typeof r.body.getReader!=='function'||typeof TextDecoder==='undefined')throw 0;
+      return readNdjson(r,planProgress);
+    })
+    .then(function(ev){
+      if(ev&&ev.type==='error'){
+        if(ev.msg)$('ldDesc').textContent='生成失败:'+ev.msg;
+        throw 0;
+      }
+      if(!ev||ev.type!=='done'||!ev.plan||!ev.plan.days||!ev.plan.days.length)throw 0;
+      applyPlan(ev.plan);
+    })
+    .catch(function(e){
+      if(_ld.cancel||(e&&e.name==='AbortError'))return;
+      plainPlan();      // 旧后端没有流式接口 / 被缓冲了:退化成一次性请求,遮罩照样不关
+    });
+}
+/* 按行读 NDJSON,每行回调一次,最后一条 type=done/error 的事件作为结果返回 */
+function readNdjson(resp,cb){
+  var rd=resp.body.getReader(),dec=new TextDecoder('utf-8'),buf='',last=null;
+  function take(line){
+    line=line.trim();
+    if(!line)return;
+    try{
+      var ev=JSON.parse(line);
+      cb(ev);
+      if(ev.type==='done'||ev.type==='error')last=ev;
+    }catch(e){}
+  }
+  return new Promise(function(resolve,reject){
+    (function pump(){
+      rd.read().then(function(x){
+        if(x.done){take(buf);resolve(last);return}
+        buf+=dec.decode(x.value,{stream:true});
+        var arr=buf.split('\n');buf=arr.pop();
+        for(var i=0;i<arr.length;i++)take(arr[i]);
+        pump();
+      }).catch(reject);
+    })();
+  });
+}
+function applyPlan(d){
+  if(_ld.cancel)return;
+  planProgress({stage:'done',detail:'行程已就绪',pct:1});
+  S.plan=d;S.live=!!d.live;
+  enter();                  // 先把行程页渲染出来,再撤遮罩 —— 否则会闪一下空白
+  setTimeout(hideLoad,220);
+}
+function plainPlan(){
+  if(_ld.cancel)return;
+  $('ldDesc').textContent='当前后端不支持进度反馈,正在生成,请稍候…';
   fetch(API+'/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({city:cityLabel(),days:S.days,prefs:S.prefs,pace:S.pace,fresh:!!S.planFresh})})
+      body:_planBody(),signal:(_ld.abort&&!_ld.cancel)?_ld.abort.signal:undefined})
     .then(function(r){return r.json()})
     .then(function(d){
       if(!d||!d.days||!d.days.length)throw 0;
-      S.plan=d;S.live=!!d.live;enter();
+      applyPlan(d);
     })
-    .catch(function(){
-      // 后端失败时降级到示例数据。但示例城市只有三个,
-      // 用户刚输入的城市很可能不在里面,直接 localPlan() 会在 pool() 里抛错变白屏。
-      S.live=false;
-      if(!RAW[S.city]){var bad=S.city;S.city='成都';toast('「'+bad+'」暂时拿不到真实数据,先用成都演示');}
-      localPlan();
+    .catch(function(e){
+      if(_ld.cancel||(e&&e.name==='AbortError'))return;
+      localFallback();
     });
+}
+function localFallback(){
+  // 后端失败降级到示例数据。但示例城市只有三个,
+  // 用户刚输入的城市很可能不在里面,直接 localPlan() 会在 pool() 里抛错变白屏。
+  S.live=false;
+  if(!RAW[S.city]){var bad=S.city;S.city='成都';toast('「'+bad+'」暂时拿不到真实数据,先用成都演示');}
+  try{localPlan()}catch(e){toast('生成失败,请重试');}
+  hideLoad();
 }
 function regen(){startPlan(true)}
 function syncBackend(){
@@ -1682,17 +2300,26 @@ function showPage(p){
   $('tb-map').classList.toggle('on',p==='map');
   $('tabbar').classList.toggle('hide',p==='home');
   document.querySelector('.body').scrollTop=0;
+  syncSticky();
+}
+/* 行程页下滑后,把标题下面的那行副标题收起来 —— 吸顶块只留"城市名 + 天数",
+   不然标题栏加天数栏两行一直挂着,留给行程的空间太少。 */
+function syncSticky(){
+  var b=document.querySelector('.body'),h=$('tripHead');
+  if(!b||!h)return;
+  h.classList.toggle('mini',b.scrollTop>24);
 }
 function go(p){
   // 还没生成行程就点「行程 / 地图」,那两页是空的。挡回全城页并说一句
   if((p==='trip'||p==='map')&&!S.plan){
     showPage('city');toast('先在「全城」页选好天数,生成行程');return;
   }
-  showPage(p);
-  // 以前只有 map 分支会渲染,trip 分支什么都不做 ——
-  // 结果生成完跳到行程页是空的,必须手动改一下行程才会显示出来。
-  if(p==='map')renderMap();
+  // trip 先在幕后渲染完再切页:否则就是"先露出空行程页再往里填",而加载遮罩是半透明的,
+  // 那一瞬间的空页是要被看见的。地图则相反 —— MapLibre 得先有真实容器尺寸才画得出来,
+  // 必须等 showPage 之后。
   if(p==='trip'&&S.plan)renderTrip();
+  showPage(p);
+  if(p==='map')renderMap();
   if(p==='city'&&S.city&&cityPois().length)renderCity();
 }
 
@@ -1758,7 +2385,7 @@ $('mapModeCtl').querySelectorAll('.chip').forEach(function(c){
   };
 });
 
-/* 全城地图:视角(三维/俯视/旋转) + 底图(卫星/地形)。两种引擎(MapLibre / 腾讯)都支持 */
+/* 全城地图:视角(俯视/旋转) + 底图(卫星/街道·交通图) */
 $('cityViewCtl').querySelectorAll('.chip').forEach(function(c){
   c.onclick=function(){
     var v=c.getAttribute('data-v'),b=c.getAttribute('data-b');
@@ -1779,8 +2406,8 @@ $('cityViewCtl').querySelectorAll('.chip').forEach(function(c){
     $('cityViewCtl').querySelectorAll('.chip[data-v]').forEach(function(x){
       if(x.getAttribute('data-v')!=='rot')x.classList.remove('on')});
     c.classList.add('on');
-    if(CMAP.eng==='ml')CMAP.map.setPitch(v==='3d'?55:0);
-    else CMAP.map.setPitch(v==='3d'?60:0);
+    if(CMAP.eng==='ml')CMAP.map.setPitch(0);   // 俯视:垂直俯瞰
+    else CMAP.map.setPitch(0);
   };
 });
 
@@ -1792,7 +2419,7 @@ $('mapCtl').querySelectorAll('.chip').forEach(function(c){
       $('mapCtl').querySelectorAll('.chip[data-b]').forEach(function(x){x.classList.remove('on')});
       c.classList.add('on');
       S.base=b;setBaseMap(MAP.map,b);
-      $('mapSub').textContent=b==='sat'?'卫星实景 · 点标记可查看名称':'三维街道 · 点标记可查看名称';
+      $('mapSub').textContent=b==='sat'?'卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称';
       return;
     }
     $('mapCtl').querySelectorAll('.chip[data-pitch]').forEach(function(x){x.classList.remove('on')});
@@ -1800,6 +2427,14 @@ $('mapCtl').querySelectorAll('.chip').forEach(function(c){
     if(MAP.map)MAP.map.setPitch(parseFloat(c.getAttribute('data-pitch')));
   };
 });
+
+/* 状态栏时钟:进入真实北京时间(UTC+8),与行程时间轴同一套时间 */
+tickClock();
+setInterval(tickClock,1000);
+
+/* 行程页吸顶块随滚动收起副标题 */
+document.querySelector('.body').addEventListener('scroll',syncSticky,{passive:true});
+syncSticky();
 
 renderHome();probe();
 /* 上次生成过的行程会从本地恢复,参数(城市/天数/偏好/节奏)一起带回来 */
