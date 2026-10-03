@@ -196,6 +196,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .li .a{font-size:12px;color:var(--brand);flex:none}
 .li .r{font-size:12px;color:var(--warn);flex:none}
 
+/* 落脚点:卡片复用 .loc 的外观;搜索结果复用抽屉的 .li */
+.stayrow{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--soft);border:1px solid var(--line);border-radius:13px;margin-top:12px}
+.stayrow input{flex:1;border:none;background:transparent;font-size:14px;font-family:inherit;color:var(--tx);outline:none}
+.stayrow button{border:none;background:var(--brand);color:#fff;font-size:13px;padding:7px 14px;border-radius:9px;cursor:pointer;font-family:inherit}
+.stayquick{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.stayquick .q{font-size:12px;padding:7px 12px;border-radius:16px;background:var(--soft);border:1px solid var(--line);color:var(--tx2);cursor:pointer}
+/* 行程页上的落脚点状态条:显示这座行程是围绕哪个落脚点排的,并且能改 */
+.staybar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx2);margin:12px 20px 0;padding:8px 11px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
+.staybar b{font-weight:500;color:var(--tx1)}
+.staybar .k{margin-left:auto;color:var(--brand);cursor:pointer;flex:none}
+/* 时间轴上的通勤文案:去程 / 回程要一眼看出是落脚点相关的那段 */
+.move .mvt{color:var(--tx2);font-weight:500}
+.move.home .mvt{color:var(--brand)}
+
 .load{width:100%;padding:30px 20px;text-align:center}
 .load .sp{width:34px;height:34px;border:2.5px solid var(--brand-line);border-top-color:var(--brand);border-radius:50%;margin:0 auto 18px;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -308,6 +322,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
         <div class="sec">
           <div class="lb">节奏</div>
           <div class="chips" id="cPaceSel"></div>
+        </div>
+        <!-- 落脚点:路线从这里开始、也在这里结束。放在生成按钮之前,
+             因为它直接影响 AI 怎么分组和排顺序,是输入而不是事后微调。 -->
+        <div class="sec">
+          <div class="lb">落脚点(住哪儿)</div>
+          <div class="loc" onclick="openStay()">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-6h5v6"/></svg></div>
+            <div><div class="t1" id="stayName">未设置</div>
+              <div class="t2" id="stayHint">设了之后每天从这里出发、回到这里</div></div>
+            <div class="chg" id="stayAct">设置</div>
+          </div>
         </div>
         <button class="btn" onclick="startPlan()">按这些偏好生成行程</button>
         <div class="lb" id="restoreHint" style="display:none;margin-top:16px"></div>
@@ -550,6 +575,8 @@ var API='';
 
 var S={city:'成都',days:3,prefs:[],pace:'适中',plan:null,di:0,live:false,mapMode:'day',
        pois:[],typeFilter:'',grp:'热门',grpQ:'',poisTs:0,poisFresh:false,
+       stay:null,           // 落脚点 {name,lat,lng,addr} —— S.base 已被底图类型占用,别混用
+       // S.base 是底图类型 'sat'/'vec',不是落脚点。名字撞了很难查,两者各自独立。
        base:'sat',planTs:0,planFresh:false};
 
 /*
@@ -830,6 +857,8 @@ function pickCityName(v){
   if(!v){toast('先选一个城市');return}
   S.city=v.replace(/市$/,'');     // 高德/腾讯按城市名检索,带"市"也能命中,统一去掉更稳
   S.pois=[];S.plan=null;S.typeFilter='';S.grpQ='';S.poisTs=0;S.poisFresh=false;
+  S.stay=readStay(S.city);        // 落脚点按城市各记一份,换城市要跟着换
+  renderStay();
   destroyCityMap();               // 旧城市的全城地图实例整个销毁,避免标记/视角残留
   var rh=$('restoreHint');if(rh)rh.style.display='none';   // 旧行程已失效,隐藏恢复提示
   var si=$('citySearch');if(si)si.value='';
@@ -838,6 +867,123 @@ function pickCityName(v){
 }
 
 /* 城市页:天数 / 偏好 / 节奏 */
+/* ---------- 落脚点 ----------
+ * 落脚点是行程的两端:每天 9:00 从这里出发、玩完回到这里。
+ * 后端拿到它会多做两件事 —— 首集的路段要算进去,AI 分组时会参考它到各点的距离;
+ * 没有落脚点的行程是"每天凭空出现在第一个景点门口",换住处通勤差别很大。
+ * 按城市各自记住:住的地方通常换城市就换。
+ */
+var STAY_PREFIX='tm_stay_';
+function readStay(city){
+  try{
+    var o=JSON.parse(localStorage.getItem(STAY_PREFIX+city)||'null');
+    return (o&&o.name&&typeof o.lat==='number'&&typeof o.lng==='number')?o:null;
+  }catch(e){return null}
+}
+function writeStay(city,st){
+  try{
+    if(st)localStorage.setItem(STAY_PREFIX+city,JSON.stringify(st));
+    else localStorage.removeItem(STAY_PREFIX+city);
+  }catch(e){}
+}
+function setStay(st){
+  S.stay=st||null;
+  writeStay(S.city,S.stay);
+  renderStay();
+}
+function renderStayBar(){
+  var el=document.getElementById('stayBar');
+  if(!el){
+    var anchor=$('daySum');
+    if(!anchor)return;
+    el=document.createElement('div');el.id='stayBar';
+    anchor.insertAdjacentElement('beforebegin',el);
+  }
+  var st=stayOfPlan();
+  // 没设落脚点就整条隐藏。以前这里直接取 st.name,未设置时抛错,
+  // 会把调用它的初始化流程整个打断(选城市、点列表等点击全都失效)。
+  if(!st){el.style.display='none';el.innerHTML='';return}
+  el.style.display='flex';
+  el.className='staybar';
+  el.innerHTML='<span>落脚点</span><b>'+esc(st.name)+'</b>'+
+    '<span class="k" onclick="openStay()">更改</span>';
+}
+/* 落脚点只是附属信息,渲染它出任何岔子都不能拖垮主流程 ——
+   顶层脚本一断,后面所有点击(选城市、点列表…)全都绑不上,页面看着就是"点什么都没反应"。 */
+function renderStay(){
+  try{_renderStayInner()}catch(e){}
+}
+function _renderStayInner(){
+  var nm=$('stayName'),hint=$('stayHint'),act=$('stayAct');
+  if(nm){
+    if(S.stay){
+      nm.textContent=S.stay.name;
+      hint.textContent=(S.stay.addr||'已设为每天出发与返回的地点').slice(0,28);
+      act.textContent='更改';
+    }else{
+      nm.textContent='未设置';
+      hint.textContent='设了之后每天从这里出发、回到这里';
+      act.textContent='设置';
+    }
+  }
+  renderStayBar();
+}
+function openStay(){
+  if(!API){toast('需要后端才能搜地点');return}
+  var quick=[cityLabel()+'站',cityLabel()+'机场','市中心','希尔顿','如家','亚朵'];
+  $('sheetBox').innerHTML=
+    '<h2>落脚点</h2><div class="d">酒店、民宿、朋友家、车站都行。定了之后每天从这里出发、玩完回到这里,'+
+    'AI 会据此安排首�尾景点与每天的顺序。</div>'+
+    '<div class="stayrow"><input id="stayIn" placeholder="搜地名或酒店,例如 '+cityLabel()+'站、亚朵">'+
+    '<button id="stayGo">搜索</button></div>'+
+    '<div class="stayquick" id="stayQuick">'+quick.map(function(q){
+      return '<div class="q">'+esc(q)+'</div>'}).join('')+'</div>'+
+    (S.stay?'<div class="li" id="stayClear"><div><div class="n" style="color:#A32D2D">清除落脚点</div>'+
+      '<div class="m">当前:'+esc(S.stay.name)+'</div></div><span class="a">清除</span></div>':'')+
+    '<div id="stayList"></div>';
+  var list=$('stayList'),inp=$('stayIn');
+  function go(kw){searchStay(kw,list)}
+  $('stayGo').onclick=function(){go(inp.value.trim())};
+  inp.onkeydown=function(e){if(e.key==='Enter')go(inp.value.trim())};
+  $('stayQuick').querySelectorAll('.q').forEach(function(q){
+    q.onclick=function(){inp.value=q.textContent;go(q.textContent)};
+  });
+  var clr=$('stayClear');
+  if(clr)clr.onclick=function(){
+    setStay(null);closeSheet();toast('已清除落脚点,重新生成行程生效');
+  };
+  $('m-sheet').classList.add('on');
+  setTimeout(function(){try{inp.focus()}catch(e){}},60);
+  if(inp.value.trim())go(inp.value.trim());
+}
+function searchStay(kw,box){
+  if(!kw){toast('输入地名或酒店名');return}
+  if(!box)box=$('stayList');
+  if(box)box.innerHTML='<div class="d">正在搜索「'+esc(kw)+'」…</div>';
+  fetch(API+'/api/places?city='+encodeURIComponent(cityLabel())+
+        '&kw='+encodeURIComponent(kw)+'&limit=8',{cache:'no-store'})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      var ps=(d&&d.places)||[];
+      if(!ps.length){box.innerHTML='<div class="d">没搜到,换个词试试(可以只写片区或街道名)</div>';return}
+      box.innerHTML=ps.map(function(p,i){
+        return '<div class="li" data-i="'+i+'"><div><div class="n">'+esc(p.name)+'</div>'+
+          '<div class="m">'+esc([p.type,p.addr].filter(Boolean).join(' · ')).slice(0,120)+'</div></div>'+
+          '<span class="a">选这里</span></div>'}).join('');
+      box.querySelectorAll('.li').forEach(function(e){
+        e.onclick=function(){
+          var p=ps[+e.getAttribute('data-i')];
+          setStay({name:p.name,lat:p.lat,lng:p.lng,addr:p.addr||''});
+          closeSheet();
+          toast('落脚点已设为 '+p.name+(S.plan?' · 重新生成行程才生效':''));
+        };
+      });
+    })
+    .catch(function(){
+      if(box)box.innerHTML='<div class="d">搜索失败了,检查一下后端是否在运行</div>';
+    });
+}
+
 function renderCityOpts(){
   var h=$('cDaySel'),i;h.innerHTML='';
   for(i=1;i<=5;i++){var e=document.createElement('div');e.className='dayc'+(i===S.days?' on':'');e.textContent=i+' 天';
@@ -923,8 +1069,14 @@ function renderTrip(){
   var box=$('timeline'),idx=0;box.innerHTML='';
   tl.nodes.forEach(function(n){
     if(n.kind==='move'){
-      var e=document.createElement('div');e.className='move';
-      e.innerHTML='<span>'+n.mode+' · 约 '+n.min+' 分钟</span><span class="ln"></span>';
+      // 落脚点的去程/回程要认出来:普通路段写"前往 X",去程写"从落脚点出发",回程写"回到 X"。
+      // 认法统一按 from 是不是落脚点判断,这样即使顺序被打乱也不会标错。
+      var bn=(S.plan&&S.plan.base&&S.plan.base.name)||'';
+      var lbl = n.home ? ('回到 '+esc(n.to||'落脚点'))
+              : (bn && n.from===bn) ? ('从 '+esc(n.from)+' 出发')
+              : ('前往 '+esc(n.to||''));
+      var e=document.createElement('div');e.className='move'+(n.home?' home':'');
+      e.innerHTML='<span class="mvt">'+lbl+'</span><span>'+n.mode+' · 约 '+n.min+' 分钟</span><span class="ln"></span>';
       box.appendChild(e);return;
     }
     if(n.kind==='meal'){
@@ -1193,8 +1345,8 @@ function renderMapList(items){
       (p.indoor?'<span class="tg">室内</span>':'')+'</div>';
     if(cityMode&&MAP.map){
       e.onclick=function(){
-        MAP.map.setCenter(new TMap.LatLng(p.lat,p.lng));
-        MAP.map.setZoom(16);
+        _scrollMapIntoView('mapBox');
+        _flyTMap(MAP.map,p.lat,p.lng,16);
       };
       e.style.cursor='pointer';
     }
@@ -1295,8 +1447,24 @@ function writeCityCache(city,pois){
  * (大模型建议跟着行程一起缓存,这部分是最贵的)。编辑过的行程会刷新时间戳。 */
 var PLAN_KEY='tm_plan';
 function planSig(){
-  // 末尾带规划引擎版本:AI 综合规划(v2)与前规则版缓存不互通,避免旧行程被直接复用
-  return [S.city,S.days,S.prefs.slice().sort().join(','),S.pace,'v2'].join('|');
+  // 末尾带规划引擎版本:AI 综合规划(v2)与前规则版缓存不互通,避免旧行程被直接复用。
+  // 落脚点也要进签名 —— 换了个住处,每天的出发/回程都变了,旧行程不能拿来就用。
+  return [S.city,S.days,S.prefs.slice().sort().join(','),S.pace,
+          S.stay?S.stay.name:'-','v2'].join('|');
+}
+/* 请求用:用户当前设定的落脚点。用户清掉了就是没有 —— 不能因为上一份行程用过
+   就悄悄把它带回去,那样"清除"等于没清。 */
+function stayRece(){
+  var st=S.stay;
+  if(!st||typeof st.lat!=='number'||typeof st.lng!=='number')return null;
+  return {name:st.name,lat:st.lat,lng:st.lng,addr:st.addr||''};
+}
+/* 展示用:这份行程实际围绕着的落脚点。以 plan.base 为准 —— 行程是照它排出来的,
+   用户之后改了落脚点也得继续把旧行程说对,避免出现"条上写着 A、路线是按 B 排的"。 */
+function stayOfPlan(){
+  var b=S.plan&&S.plan.base;
+  if(b&&typeof b.lat==='number')return b;
+  return stayRece();
 }
 function savePlan(){
   if(!S.plan)return;
@@ -1317,7 +1485,9 @@ function restorePlan(){
     var o=JSON.parse(localStorage.getItem(PLAN_KEY));
     if(o&&o.sig){
       var parts=o.sig.split('|');
-      if(parts.length===5){
+      // 5 段是旧签名(city|days|prefs|pace|v2),6 段起多了一项落脚点。
+      // 前四项的相对位置没变,所以只放宽长度判断就行,旧存档照样能恢复。
+      if(parts.length>=5){
         var c=parts[0];
         S.city=(RAW[c]||CITY_FLAT.indexOf(c)>=0)?c:S.city;
         S.days=Math.max(1,Math.min(5,parseInt(parts[1])||3));
@@ -1968,6 +2138,47 @@ function renderCityList(items){
     L.appendChild(more);
   }
 }
+/* ---------- 点地名录 → 在地图上定位 ----------
+ * 全城页的地图有两种内核:MapLibre 真三维地形(默认)和腾讯平面(降级)。
+ * 两者中心点 API 完全不同,以前只写了腾讯那一套,MapLibre 下点列表会静默失败 ——
+ * 看上去就是"点地名没反应"。这里按内核分别处理,并统一处理结果相同:飞过去 + 弹气泡。
+ */
+function _flyTMap(map,lat,lng,zoom){
+  try{
+    if(map.flyTo)map.flyTo({center:new TMap.LatLng(lat,lng),zoom:zoom});
+    else{map.setCenter(new TMap.LatLng(lat,lng));map.setZoom(zoom)}
+  }catch(e){
+    try{map.setCenter(new TMap.LatLng(lat,lng));map.setZoom(zoom)}catch(_){}
+  }
+}
+function _scrollMapIntoView(id){
+  var box=typeof id==='string'?$(id):id;
+  if(box&&box.scrollIntoView)try{box.scrollIntoView({behavior:'smooth',block:'center'})}catch(e){}
+}
+/* 列表在页面下方、地图在上方:只飞镜头用户看不见,所以顺便把地图滚进视野 */
+function cityFocus(p,zoom){
+  if(!p||typeof p.lat!=='number')return;
+  if(!CMAP.map){toast('地图还没加载好');return}
+  zoom=zoom||15.5;
+  _scrollMapIntoView('cityMapBox');
+  if(CMAP.eng==='ml'){
+    var w=gcj02ToWgs84(p.lat,p.lng);      // 卫星/地形底图是 WGS-84,标记也是这么加的
+    try{CMAP.map.flyTo({center:[w.lng,w.lat],zoom:zoom,essential:true})}
+    catch(e){try{CMAP.map.setCenter([w.lng,w.lat]);CMAP.map.setZoom(zoom)}catch(_){}}
+    setTimeout(function(){
+      try{
+        CMAP._popup=CMAP._popup||new maplibregl.Popup({offset:16,closeButton:false,closeOnClick:true});
+        CMAP._popup.setLngLat([w.lng,w.lat]).setHTML(
+          '<div style="padding:5px 8px;font-size:12.5px;line-height:1.5">'+
+          '<b>'+esc(p.name)+'</b><br><span style="color:#676B65">'+esc(p.type)+' · '+
+          Number(p.rating||0).toFixed(1)+' 分 · '+(p.cost?'人均 ¥'+p.cost:'免费')+'</span></div>')
+          .addTo(CMAP.map);
+      }catch(_){}
+    },520);                                // 等镜头落稳再弹,气泡位置才是新的
+  }else{
+    _flyTMap(CMAP.map,p.lat,p.lng,Math.round(zoom));   // 腾讯平面底图吃 GCJ-02,直接用高德坐标
+  }
+}
 function poiRow(p){
   var c=tcolor(p.type),e=document.createElement('div');
   e.className='card';e.style.cssText='margin-bottom:8px;cursor:pointer';
@@ -1980,11 +2191,7 @@ function poiRow(p){
     '<span class="tg">'+(p.cost?'人均 ¥'+p.cost:'免费')+'</span>'+
     (p.indoor?'<span class="tg">室内</span>':'')+'</div>'+
     (p.highlight?'<div class="hl">'+p.highlight+'</div>':'');
-  e.onclick=function(){
-    if(!CMAP.map){toast('地图还没加载好');return}
-    CMAP.map.setCenter(new TMap.LatLng(p.lat,p.lng));
-    CMAP.map.setZoom(16);
-  };
+  e.onclick=function(){cityFocus(p)};
   return e;
 }
 
@@ -2081,7 +2288,8 @@ function sendChat(){
   CHAT_BUSY=true;$('chatSend').disabled=true;
   var wait=chatLog('正在按你的意见重排…','ai');
   fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({city:S.plan.city,days:S.plan.days,message:msg,pace:S.plan.pace,prefs:S.prefs})})
+    body:JSON.stringify({city:S.plan.city,days:S.plan.days,message:msg,pace:S.plan.pace,
+                         prefs:S.prefs,base:stayRece()})})
     .then(function(r){return r.json()})
     .then(function(d){
       wait.remove();
@@ -2190,7 +2398,7 @@ function startPlan(fresh){
 }
 function _planBody(){
   return JSON.stringify({city:cityLabel(),days:S.days,prefs:S.prefs,
-                         pace:S.pace,fresh:!!S.planFresh});
+                         pace:S.pace,fresh:!!S.planFresh,base:stayRece()});
 }
 function enter(){$('tabbar').classList.remove('hide');S.di=0;savePlan();go('trip')}
 function localPlan(){S.plan=buildPlan(S.city,S.days,S.prefs,S.pace);enter()}
@@ -2255,6 +2463,8 @@ function applyPlan(d){
   if(_ld.cancel)return;
   planProgress({stage:'done',detail:'行程已就绪',pct:1});
   S.plan=d;S.live=!!d.live;
+  // 后端回写的落脚点补进本地状态:只有名字没有坐标的话算不出通勤,就不收。
+  if(d&&d.base&&typeof d.base.lat==='number'){S.stay={name:d.base.name,lat:d.base.lat,lng:d.base.lng,addr:d.base.addr||''};writeStay(S.city,S.stay);renderStay()}
   enter();                  // 先把行程页渲染出来,再撤遮罩 —— 否则会闪一下空白
   setTimeout(hideLoad,220);
 }
@@ -2285,7 +2495,8 @@ function regen(){startPlan(true)}
 function syncBackend(){
   if(!API||!S.plan)return;
   fetch(API+'/api/replan',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({city:S.plan.city,days:S.plan.days.map(function(d){return d.items})})})
+    body:JSON.stringify({city:S.plan.city,days:S.plan.days.map(function(d){return d.items}),
+                         base:stayRece()})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(!d||!d.days)return;
@@ -2437,8 +2648,13 @@ document.querySelector('.body').addEventListener('scroll',syncSticky,{passive:tr
 syncSticky();
 
 renderHome();probe();
+try{S.stay=readStay(S.city)}catch(e){}      // 上次的落脚点,进页面就恢复
+renderStay();
 /* 上次生成过的行程会从本地恢复,参数(城市/天数/偏好/节奏)一起带回来 */
 if(restorePlan()){
+  // 城市可能是被行程带回来的,落脚点要按这个城市重读一份
+  try{S.stay=readStay(S.city)}catch(e){}
+  renderStay();
   renderHome();
   $('tabbar').classList.remove('hide');
   var rh=$('restoreHint');rh.style.display='block';

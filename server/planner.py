@@ -72,12 +72,21 @@ def score(pool: list, prefs: list) -> list:
     return [p for p, _ in out]
 
 
-def nearest_order(items: list) -> list:
-    """最近邻重排:从第一个点出发,每次走向剩下的最近的点。"""
+def nearest_order(items: list, start: dict = None) -> list:
+    """最近邻重排:从第一个点出发,每次走向剩下的最近的点。
+
+    start 传落脚点时,头一个点改成"离落脚点最近的那个" —— 早上不用先横穿半座城
+    再折回来。不给 start 就退回原来的行为(保住调用方已有的顺序)。"""
     if len(items) <= 1:
         return list(items)
-    rest = list(items[1:])
-    out = [items[0]]
+    rest = list(items)
+    if start and start.get("lat") and start.get("lng"):
+        first = min(rest, key=lambda p: amap.haversine(
+            start["lat"], start["lng"], p["lat"], p["lng"]))
+    else:
+        first = rest[0]
+    rest.remove(first)
+    out = [first]
     while rest:
         last = out[-1]
         nxt = min(rest, key=lambda p: amap.haversine(last["lat"], last["lng"], p["lat"], p["lng"]))
@@ -143,19 +152,36 @@ def split_days(ranked: list, days: int, per_day: int, pace: str = "适中") -> l
     return groups
 
 
-def layout_timeline(ordered: list, city: str, on_move=None) -> dict:
+def _move(a: dict, b: dict, city: str, home: bool = False) -> dict:
+    """一段通勤。去程 / 回程(home=True)都从这里出,省得两处写得不一致。"""
+    mode, mins = amap.route_time(a, b, city)
+    node = {"kind": "move", "mode": mode, "min": mins,
+            "to": b.get("name") or "落脚点", "from": a.get("name") or "落脚点"}
+    if home:
+        node["home"] = True
+    return node
+
+
+def layout_timeline(ordered: list, city: str, base: dict = None,
+                    on_move=None) -> dict:
     """把"已排好顺序"的景点序列铺成真实时间轴。
 
     站间耗时来自路径规划接口(绝不交给模型估算);夜景类(best_time=='evening')
     强制排在傍晚(≥17:00)之后;途中跨过 12:00 自动插入午餐。
     和 compute_day 共用,保证 AI 方案与规则方案走同一套"事实落地"逻辑。
 
+    base 是落脚点(酒店/住处)。给了的话,每天 9:00 从落脚点出发、最后回到落脚点,
+    这两段通勤同样走真实接口 —— 之前的行程是"每天凭空出现在第一个景点门口",
+    换个落脚点通勤差别很大,按直线估算出来的到店时间不可信。
+
     on_move(done, total):每算完一段站间通勤回调一次。这一段要按点对逐个请求
     路径规划接口,天数多点数多时能到十几秒,是加载界面上最需要真实反馈的阶段。
     """
     if not ordered:
         return {"items": [], "timeline": [], "end": START_MIN}
-    total_move = max(0, len(ordered) - 1)
+    home = bool(base and base.get("lat") and base.get("lng"))
+    # 站间段数:点之间的,加上去程 / 回程两段
+    total_move = max(0, len(ordered) - 1) + (2 if home else 0)
     done_move = 0
     # 安全兜底:夜景/傍晚类强制放到当天最后(模型一般也会这么排,这里防止出现
     # "傍晚景点之后又接一个白天景点被推到 18:30" 的违和)。保持组内其余顺序不变。
@@ -163,6 +189,22 @@ def layout_timeline(ordered: list, city: str, on_move=None) -> dict:
                + [p for p in ordered if p.get("best_time") == "evening"])
     t = START_MIN
     nodes = []
+
+    def _tick():
+        nonlocal done_move
+        done_move += 1
+        if on_move:
+            try:
+                on_move(done_move, total_move)
+            except Exception:
+                pass
+
+    if home:                                   # 9:00 从落脚点动身
+        mv = _move(base, ordered[0], city)
+        nodes.append(mv)
+        t += mv["min"]
+        _tick()
+
     for i, it in enumerate(ordered):
         arrive = t
         # 夜景类强制傍晚之后,否则傍晚去就没意义了
@@ -180,18 +222,19 @@ def layout_timeline(ordered: list, city: str, on_move=None) -> dict:
                 t += LUNCH_LEN
             mode, mins = amap.route_time(it, ordered[i + 1], city)
             nodes.append({"kind": "move", "mode": mode, "min": mins,
-                          "to": ordered[i + 1]["name"]})
+                          "to": ordered[i + 1]["name"], "from": it["name"]})
             t += mins
-            done_move += 1
-            if on_move:
-                try:
-                    on_move(done_move, total_move)
-                except Exception:
-                    pass
+            _tick()
+
+    if home:                                   # 玩完回到落脚点,这天到这里才算结束
+        mv = _move(ordered[-1], base, city, home=True)
+        nodes.append(mv)
+        t += mv["min"]
+        _tick()
     return {"items": ordered, "timeline": nodes, "end": t}
 
 
-def compute_day(items: list, city: str) -> dict:
+def compute_day(items: list, city: str, base: dict = None) -> dict:
     """生成当天时间轴(规则版:空间最近邻 + 夜景置后)。
 
     实际落地交给 layout_timeline,这里只决定"顺序"。AI 方案则直接把 AI 给的
@@ -200,18 +243,21 @@ def compute_day(items: list, city: str) -> dict:
     normal = [p for p in items if p.get("best_time") != "evening"]
     ordered = []
     if normal:
-        ordered += nearest_order(normal)
+        ordered += nearest_order(normal, base)
     if evening:
         ordered += nearest_order(evening)
-    return layout_timeline(ordered, city)
+    return layout_timeline(ordered, city, base)
 
 
-def _plan_key(city: str, days: int, prefs: list, pace: str) -> str:
+def _plan_key(city: str, days: int, prefs: list, pace: str, base: dict = None) -> str:
     """同一组输入就是同一份行程 —— 重复生成没必要再烧一次大模型和路径规划。
     v2:AI 综合规划版(选择/分组/排序/经典特色均由模型给出),与旧的规则版缓存区分开。
     v3:再叠一层联网热点。必须换 key —— 否则命中 v2 的旧缓存,热点完全体现不出来。
+    v4:再加落脚点。落脚点不同则每天的出发/回程通勤都不一样,必须各自缓存 ——
+       这也是为什么 key 里只放地点名:坐标小数位漂移不该导致缓存永远不命中。
     """
-    return f'v3|{city}|{days}|{",".join(sorted(prefs or []))}|{pace}'
+    b = (base or {}).get("name") or "-"
+    return f'v4|{city}|{days}|{",".join(sorted(prefs or []))}|{pace}|{b}'
 
 
 # ---------- AI 综合规划 ----------
@@ -225,14 +271,15 @@ PLAN_PROMPT = """你是一位资深旅行行程规划师。下面是一座城市
 天数: {days} 天
 节奏: {pace}(轻松≈每天3个,适中≈4个,紧凑≈5个)
 用户偏好: {prefs}
+落脚点(住宿/出发点): {base}
 
-候选景点(每行一个,name | 类型 | 评分 | 建议游玩分钟 | 最佳时段 | 人均 | 室内/室外 | 坐标 | 临近景点):
+候选景点(每行一个,name | 类型 | 评分 | 建议游玩分钟 | 最佳时段 | 人均 | 室内/室外 | 距落脚点 | 坐标 | 临近景点):
 {pois}
 {hot}
 要求:
 1. 只从上述候选里挑选,不要编造任何景点。每天点数大致符合节奏。
 2. 同一天的景点要在地理上尽量紧凑(用坐标与"临近"信息判断,避免跨城折返);夜景/傍晚类(最佳时段含"傍晚/夜间")放当天最后;户外/自然类尽量排上午或下午、避开正午暴晒;上午类排前面。
-3. 兼顾用户偏好与类型多样(历史、自然、美食、拍照不要全挤在一天)。
+3. 兼顾用户偏好与类型多样(历史、自然、美食、拍照不要全挤在一天)。{base_req}
 4. 为每个被你选中的景点写一句"经典特色"(它最值得看的是什么,例如某宫殿的世界之最、某古街的历史地位、某博物馆的镇馆之宝),以及一句"为什么排这里"(结合时段/位置/与其他景点的搭配)。
 5. 每天写一句"本日思路",说明你当天安排的逻辑(为何这样串联、如何照顾特色与体力)。
 6. 若有"当下热点"段落:这批是联网核实过、确在地图上的当下热点,请尽量安排进合适的一天
@@ -255,7 +302,7 @@ def _norm_name(s: str) -> str:
 
 
 def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
-                       hot: dict = None) -> str:
+                       hot: dict = None, base: dict = None) -> str:
     """挑出要喂给模型的候选(按评分 + 偏好加权截断到可控规模),并附上临近景点提示,
     让模型有地理聚类所需的上下文。
 
@@ -289,16 +336,44 @@ def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
     for p in sel:
         near = ", ".join(f"{n}({d}km)" for n, d in nb[p["id"]])
         flag = "[当下热点] " if p.get("hot") else ""
+        # 到落脚点的直线距离。直线而非路程是因为这条路模型没法算准确,而"远不远"
+        # 只需要个量级;真正的通勤时间仍由路径规划接口落地,不交给模型。
+        far = ""
+        if _valid_base(base):
+            far = (f"距落脚点:{amap.haversine(base['lat'], base['lng'], p['lat'], p['lng']):.1f}km | ")
         lines.append(
             f"- {flag}{p['name']} | 类型:{p['type']} | 评分:{p['rating']} | "
             f"建议游玩:{p['duration']}分钟 | 最佳时段:{p.get('best_time_label','')} | "
             f"人均{int(p['cost']) if p['cost'] else 0}元 | {'室内' if p['indoor'] else '室外'} | "
-            f"坐标:{p['lat']:.4f},{p['lng']:.4f} | 临近:{near}")
+            f"{far}坐标:{p['lat']:.4f},{p['lng']:.4f} | 临近:{near}")
 
     return PLAN_PROMPT.format(city=city, days=days, pace=pace,
                               prefs=", ".join(prefs) if prefs else "（无特别偏好）",
                               pois="\n".join(lines),
-                              hot=_hot_section(hot, sel))
+                              hot=_hot_section(hot, sel),
+                              base=_base_text(base),
+                              base_req=_base_req(base))
+
+
+def _valid_base(base) -> bool:
+    """落脚点要么不设,要么就得能算距离 —— 只有名字没有坐标的话宁可按没设处理。"""
+    return bool(base and base.get("lat") is not None and base.get("lng") is not None)
+
+
+def _base_text(base) -> str:
+    if not _valid_base(base):
+        return "（未设定,默认每天从市中心机动出发）"
+    nm = base.get("name") or "落脚点"
+    return f"{nm}（坐标 {base['lat']:.4f},{base['lng']:.4f}）"
+
+
+def _base_req(base) -> str:
+    if not _valid_base(base):
+        return ""
+    return ("\n   - 每天 09:00 从落脚点出发、玩完回到落脚点，这两段通勤时间是实际存在的,\n"
+            "     已计入当天总时长(预算约9小时),因此请据此控制当天的点数;\n"
+            "     每天的头一个景点尽量离落脚点近一些或顺路,避免一早先横穿半座城;\n"
+            "     最后一天要为返程留出余地(行李、赶车),不要排得太满太远;")
 
 
 def _hot_section(hot: dict, sel: list) -> str:
@@ -317,14 +392,15 @@ def _hot_section(hot: dict, sel: list) -> str:
             + body + "\n")
 
 
-def ai_plan(city: str, pool: list, days: int, prefs: list, pace: str, hot: dict = None):
+def ai_plan(city: str, pool: list, days: int, prefs: list, pace: str, hot: dict = None,
+            base: dict = None):
     """让大模型综合候选池给出:分组(哪天去哪几个)、顺序、每点经典特色与排布理由。
 
     返回 dict 或 None(网络/解析失败时返回 None,由调用方回退到规则版)。
     注意:模型只能从 pool 里挑,返回的景点名必须能在 pool 中匹配到,匹配不上的直接丢弃,
     因此绝不会把不存在的景点排进行程。"""
     try:
-        raw = llm.ask_json(_build_plan_prompt(city, pool, days, prefs, pace, hot),
+        raw = llm.ask_json(_build_plan_prompt(city, pool, days, prefs, pace, hot, base),
                           max_tokens=1800, timeout=40)
     except Exception as e:
         import logging
@@ -363,8 +439,12 @@ def ai_plan(city: str, pool: list, days: int, prefs: list, pace: str, hot: dict 
 
 
 def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
-               fresh: bool = False, emit=None) -> dict:
+               fresh: bool = False, emit=None, base: dict = None) -> dict:
     """生成完整行程。emit(dict) 用于向前端推送真实进度事件,没传就完全静默。
+
+    base 是落脚点 {name, lat, lng}:给了就每天从这里出发、回到这里,并且 AI 编排
+    时会参考它到各点的距离。没有落脚点的行程默认从第一站开始,这在换了住处、
+    通勤动辄四五十分钟的城市里,时间点是不准的。
 
     各阶段的 pct 区间是估的:
 
@@ -384,7 +464,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
             except Exception:
                 pass
 
-    key = _plan_key(city, days, prefs, pace)
+    key = _plan_key(city, days, prefs, pace, base)
     if not fresh:
         got = store.read("plan", key)
         if isinstance(got, dict) and got.get("days"):
@@ -427,7 +507,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     groups, day_notes, summary = None, [], ""
     if MODEL_LIVE:
         _emit("ai", "AI 正在综合特色、时段、体力编排行程", 0.52)
-        res = ai_plan(city, pool, days, prefs, pace, hot)
+        res = ai_plan(city, pool, days, prefs, pace, hot, base)
         if res:
             groups, day_notes, summary = res["groups"], res["day_notes"], res["summary"]
             # 把模型给的经典特色落盘,下次 /api/pois、replan 也能复用
@@ -462,22 +542,24 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
 
     used = {p["id"] for g in groups for p in g}
     plan_days = []
-    total_move = sum(max(0, len(g) - 1) for g in groups)
+    # 落脚点会让每天多出去程+回程两段,段数要算进去,否则进度会冲过 100%
+    total_move = sum(max(0, len(g) - 1) + (2 if g and _valid_base(base) else 0)
+                     for g in groups)
     done_move = 0
     _emit("route", "计算站间真实通勤时间", 0.73)
 
-    def _make_move_cb(base):
+    def _make_move_cb(offset):
         """layout_timeline 的计数是每天内部从 0 开始,这里折算成全局进度。"""
         def cb(done_in_day, _total_in_day):
             nonlocal done_move
-            done_move = base + done_in_day
+            done_move = offset + done_in_day
             if total_move:
                 _emit("route", f"通勤计算 {done_move}/{total_move} 段",
                       0.73 + 0.22 * done_move / total_move)
         return cb
 
     for i, g in enumerate(groups):
-        d = layout_timeline(g, city, on_move=_make_move_cb(done_move))
+        d = layout_timeline(g, city, base=base, on_move=_make_move_cb(done_move))
         d["day"] = i + 1
         d["note"] = day_notes[i] if i < len(day_notes) else ""
         plan_days.append(d)
@@ -488,6 +570,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     plan = {
         "city": city,
         "pace": pace,
+        "base": base if _valid_base(base) else None,   # 回写给前端,刷新页面后还在
         "days": plan_days,
         "summary": summary,
         "advice": make_advice(plan_days, city),
@@ -504,18 +587,19 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     return plan
 
 
-def replan(city: str, groups: list) -> dict:
+def replan(city: str, groups: list, base: dict = None) -> dict:
     """用户改完地点后重排并重算时间轴。groups 是 [[poi, poi, ...], ...]。
 
     尊重用户手动排好的顺序(不再用最近邻重排),只落地"事实":夜景置后、真实通勤时间。"""
     plan_days = []
     for i, g in enumerate(groups):
-        d = layout_timeline(g, city)
+        d = layout_timeline(g, city, base=base)
         d["day"] = i + 1
         plan_days.append(d)
     used = {p["id"] for d in plan_days for p in d["items"]}
     return {
         "city": city, "pace": "", "days": plan_days,
+        "base": base if _valid_base(base) else None,
         "advice": make_advice(plan_days, city),
         "pool": [p for p in amap.build_pool(city) if p["id"] not in used],
         "live": amap.LIVE, "model": MODEL_LIVE,
@@ -534,6 +618,7 @@ CHAT_PROMPT = """你是一位资深旅行规划师，正在和一位已拿到行
 城市: {city}
 总天数: {days} 天
 节奏: {pace}
+落脚点(每天从这里出发、最后回到这里): {base}
 
 【当前行程】
 {current}
@@ -550,6 +635,8 @@ CHAT_PROMPT = """你是一位资深旅行规划师，正在和一位已拿到行
 3. 每天内部保持地理紧凑，夜景/傍晚类放当天最后。
 4. 为每个景点写一句"为什么这样排"，每天写一句"本日思路"。
 5. 如果你认为他的意见不合理（比如会绕远路），照做但在 reply 里简短说明理由。
+6. 已设落脚点时：每天的头一个景点不要离落脚点太远（避免一早横穿半座城），
+   且要考虑从落脚点出发与回到落脚点的通勤时间，别把当天排到太晚。
 
 只输出如下 JSON，不要解释文字、不要代码块标记：
 {{
@@ -604,7 +691,7 @@ def _chat_pois(plan_days: list, pool: list, limit: int = 45) -> str:
 
 
 def chat_plan(city: str, plan_days: list, message: str, pool: list = None,
-              pace: str = "适中", prefs: list = None):
+              pace: str = "适中", prefs: list = None, base: dict = None):
     """按用户意见重排行程。返回 {reply, groups, day_notes, summary, classic} 或 None。
 
     None 表示没配模型或调用/解析失败,调用方应回退到规则版(只重排顺序)。
@@ -617,7 +704,8 @@ def chat_plan(city: str, plan_days: list, message: str, pool: list = None,
         city=city, days=len(plan_days), pace=pace or "适中",
         current=_chat_current(plan_days),
         pois=_chat_pois(plan_days, pool),
-        msg=(message or "").strip() or "请在保持整体均衡的前提下,优化这份行程。")
+        msg=(message or "").strip() or "请在保持整体均衡的前提下,优化这份行程。",
+        base=_base_text(base))
     try:
         raw = llm.ask_json(prompt, max_tokens=2200)
     except Exception as e:
@@ -664,7 +752,7 @@ def chat_plan(city: str, plan_days: list, message: str, pool: list = None,
     }
 
 
-def chat_fallback(city: str, plan_days: list, message: str) -> dict:
+def chat_fallback(city: str, plan_days: list, message: str, base: dict = None) -> dict:
     """没接大模型时的兜底:按关键词做最朴素的调整(减点/换顺序),并如实说明。"""
     items = [n["poi"] for d in plan_days for n in d.get("timeline", []) if n.get("kind") == "poi"]
     msg = (message or "")
@@ -678,11 +766,11 @@ def chat_fallback(city: str, plan_days: list, message: str) -> dict:
         reply = "已按你说的减了一个点,行程会松一些。不过更细的调整(换景点、控节奏)需要接上大模型。"
     else:
         for i, g in enumerate(groups):
-            groups[i] = compute_day(g, city)["items"]
+            groups[i] = compute_day(g, city, base)["items"]
         reply = "已按地理位置重排了每天的顺序(就近串着走)。想换景点或改主题,需要接上大模型。"
     plan_days = []
     for i, g in enumerate(groups):
-        d = layout_timeline(g, city)
+        d = layout_timeline(g, city, base=base)
         d["day"] = i + 1
         plan_days.append(d)
     used = {p["id"] for d in plan_days for p in d["items"]}
@@ -690,6 +778,7 @@ def chat_fallback(city: str, plan_days: list, message: str) -> dict:
         "reply": reply, "summary": "",
         "plan": {
             "city": city, "pace": "", "days": plan_days,
+            "base": base if _valid_base(base) else None,
             "advice": make_advice(plan_days, city),
             "pool": [p for p in amap.build_pool(city) if p["id"] not in used],
             "live": amap.LIVE, "model": False,

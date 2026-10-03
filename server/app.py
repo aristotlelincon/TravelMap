@@ -38,11 +38,13 @@ class PlanReq(BaseModel):
     prefs: List[str] = []
     pace: str = "适中"
     fresh: bool = False        # 「重新生成」时传 true,跳过缓存重新叫一次大模型
+    base: Optional[dict] = None  # 落脚点 {name, lat, lng},没有就是每天凭空开始
 
 
 class ReplanReq(BaseModel):
     city: str
     days: List[List[dict]]      # [[poi, poi, ...], ...] 每天一组
+    base: Optional[dict] = None
 
 
 class ChatReq(BaseModel):
@@ -51,6 +53,7 @@ class ChatReq(BaseModel):
     message: str = ""           # 用户提的意见
     pace: str = "适中"
     prefs: List[str] = []
+    base: Optional[dict] = None
 
 
 @app.get("/api/health")
@@ -88,6 +91,33 @@ def pois(city: str):
     return {"city": city, "pois": amap.build_pool(city), "live": amap.LIVE}
 
 
+@app.get("/api/places")
+def places(city: str, kw: str, limit: int = 8):
+    """落脚点候选搜索。落脚点不是景点,所以走的是另一条查询(不过 is_sight)。
+
+    搜不到返回空列表而不是报错:城市名没错只是这里没结果,让用户再换个词搜就行。
+    """
+    if not amap.LIVE:
+        return {"places": [], "live": False}
+    kw = (kw or "").strip()
+    if len(kw) < 1:
+        return {"places": [], "live": True}
+    return {"places": amap.search_place(city, kw, max(1, min(limit, 10))), "live": True}
+
+
+@app.get("/api/rgeo")
+def rgeo(loc: str):
+    """逆地理编码:地图点选落脚点后把坐标变成地址名。loc 传 "lng,lat"。"""
+    try:
+        lng, lat = (float(x) for x in (loc or "").split(",")[:2])
+    except ValueError:
+        raise HTTPException(400, "loc 需要形如 116.39,39.90")
+    got = amap.rgeo(lng, lat)
+    if not got:
+        raise HTTPException(404, "这个位置没能解析出地址")
+    return got
+
+
 @app.post("/api/plan")
 def plan(req: PlanReq):
     days = max(1, min(req.days, 5))
@@ -96,7 +126,8 @@ def plan(req: PlanReq):
     # 真实模式下拿不到候选池就是拿不到,不能返回空行程 —— 宁可报错让前端降级到示例数据
     if amap.probe() and not pool:
         raise HTTPException(503, f"高德未返回「{req.city}」的候选点,请检查城市名或 Key 额度")
-    return planner.build_plan(req.city, days, req.prefs, pace, pool, fresh=req.fresh)
+    return planner.build_plan(req.city, days, req.prefs, pace, pool, fresh=req.fresh,
+                              base=req.base)
 
 
 @app.post("/api/plan_stream")
@@ -138,7 +169,7 @@ def plan_stream(req: PlanReq):
                 raise HTTPException(
                     503, f"高德未返回「{req.city}」的候选点,请检查城市名或 Key 额度")
             plan = planner.build_plan(req.city, days, req.prefs, pace, pool,
-                                      fresh=req.fresh, emit=emit)
+                                      fresh=req.fresh, emit=emit, base=req.base)
             emit({"type": "done", "plan": plan, "pct": 1.0})
         except Exception as e:                          # 进度流里报错也要告诉前端
             emit({"type": "error", "msg": str(e) or type(e).__name__})
@@ -163,7 +194,7 @@ def plan_stream(req: PlanReq):
 @app.post("/api/replan")
 def replan(req: ReplanReq):
     """用户换/删/加之后重新排序并重算时间轴。"""
-    return planner.replan(req.city, [g for g in req.days if g])
+    return planner.replan(req.city, [g for g in req.days if g], base=req.base)
 
 
 @app.post("/api/chat")
@@ -178,11 +209,12 @@ def chat(req: ChatReq):
 
     pool = amap.build_pool(req.city)
     res = planner.chat_plan(req.city, days, req.message, pool,
-                            pace=req.pace, prefs=req.prefs)
+                            pace=req.pace, prefs=req.prefs, base=req.base)
     if res:
         plan_days = []
         for i, g in enumerate(res["groups"]):
-            d = planner.layout_timeline(g, req.city)   # 真实通勤时间由接口落地
+            # 落脚点要一直带着:改行程不该把"住哪儿"改没了
+            d = planner.layout_timeline(g, req.city, base=req.base)
             d["day"] = i + 1
             d["note"] = res["day_notes"][i] if i < len(res["day_notes"]) else ""
             plan_days.append(d)
@@ -195,13 +227,14 @@ def chat(req: ChatReq):
             "by_model": True,
             "plan": {
                 "city": req.city, "pace": req.pace, "days": plan_days,
+                "base": req.base,
                 "advice": planner.make_advice(plan_days, req.city),
                 "pool": [p for p in pool if p["id"] not in used],
                 "live": amap.LIVE, "model": True,
             },
         }
 
-    fb = planner.chat_fallback(req.city, days, req.message)
+    fb = planner.chat_fallback(req.city, days, req.message, req.base)
     return {"reply": fb["reply"], "summary": "", "by_model": False, "plan": fb["plan"]}
 
 

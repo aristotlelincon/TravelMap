@@ -211,6 +211,73 @@ def geocode(city: str):
     return lat, lng
 
 
+def search_place(city: str, kw: str, limit: int = 8) -> list:
+    """在本市按关键词找地点 —— 落脚点专用。
+
+    落脚点不是景点:酒店、民宿、小区、地铁站、机场都可能是,所以这里**不过 is_sight**
+    (那条规则本来就是要滤掉住宿服务大类的)。返回值只带编排要用到的最小字段。
+    """
+    kw = (kw or "").strip()
+    if not LIVE or not kw:
+        return []
+    try:
+        d = _get("/place/text", keywords=kw, city=city, citylimit="true",
+                 offset=min(max(limit, 1), 10), page=1, extensions="base")
+    except Exception:
+        return []
+    if str(d.get("status")) != "1":
+        return []
+    out = []
+    for raw in d.get("pois") or []:
+        loc = raw.get("location") or ""
+        if "," not in loc:
+            continue
+        try:
+            lng, lat = (float(x) for x in loc.split(",")[:2])
+        except ValueError:
+            continue
+        name = (raw.get("name") or "").strip()
+        if not name:
+            continue
+        seg = [s for s in (raw.get("type") or "").replace("|", ";").split(";") if s]
+        out.append({"name": name, "lat": lat, "lng": lng,
+                    "addr": (raw.get("address") or "").strip(),
+                    "type": seg[-1] if seg else ""})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def rgeo(lng: float, lat: float) -> dict:
+    """逆地理编码:在地图上点一个位置 → 变成能落脚的地址。
+
+    名称的优先级按"人会不会这么称呼"排:最近的 POI(如某酒店) > 小区/楼宇 > 乡镇街道。
+    """
+    try:
+        d = _get("/geocode/regeo", location=f"{lng},{lat}", extensions="base")
+    except Exception:
+        return None
+    if str(d.get("status")) != "1":
+        return None
+    rg = d.get("regeocode") or {}
+    comp = rg.get("addressComponent") or {}
+    name, addr = "", (rg.get("formatted_address") or "").strip()
+    pois = rg.get("pois") or []
+    if isinstance(pois, list) and pois:
+        name = (pois[0].get("name") or "").strip()
+    if not name:
+        for k in ("neighborhood", "building"):
+            v = comp.get(k) or {}
+            if isinstance(v, dict) and (v.get("name") or "").strip():
+                name = v["name"].strip()
+                break
+    if not name:
+        name = (comp.get("township") or comp.get("street") or "").strip()
+    if not name:
+        name = addr[:20] if addr else f"地图选点 {lat:.4f},{lng:.4f}"
+    return {"name": name, "lat": lat, "lng": lng, "addr": addr, "type": "落脚点"}
+
+
 # ---------- 候选池 ----------
 
 def _read_cache(city: str):
@@ -472,8 +539,23 @@ def build_pool(city: str, limit: int = 100, on_kw=None) -> list:
 # ---------- 站间耗时 ----------
 
 def _route_key(a, b, city: str) -> str:
-    # 5 位小数约等于 1 米,足够区分两个景点,又能让"同一对点"稳定命中
-    return f'{city}|{a["lng"]:.5f},{a["lat"]:.5f}|{b["lng"]:.5f},{b["lat"]:.5f}'
+    # 5 位小数约等于 1 米,足够区分两个景点,又能让"同一对点"稳定命中。
+    # 结果里含"方式",所以算出方式判断改了必须换 key,否则会一直读到老数值。
+    return f'v2|{city}|{a["lng"]:.5f},{a["lat"]:.5f}|{b["lng"]:.5f},{b["lat"]:.5f}'
+
+
+def _drive_min(a: dict, b: dict) -> int:
+    """打车过去要多久。景点之间直线不远但没有地铁方案时(或要绕山、跨江),
+    这才是游客真实的走法 —— 也用来替掉"步行 38 分钟""地铁 77 分钟"这种虚高方案。"""
+    d = _get("/direction/driving", origin=f'{a["lng"]},{a["lat"]}',
+             destination=f'{b["lng"]},{b["lat"]}')
+    return max(5, int(float(d["route"]["paths"][0]["duration"])) // 60)
+
+
+# 宁可打车也不接受的步行距离/时长。超过这两个值说明"走过去"或"坐着公交绕"不现实。
+WALK_MAX_MIN = 30
+TRANSIT_MAX_WALK_M = 2000
+TRANSIT_OK_RATIO = 1.6     # 公交超过打车时长的这么多倍,就判定为"绕路",改打车
 
 
 def _parse_polyline(polyline: str):
@@ -594,13 +676,32 @@ def route_time(a: dict, b: dict, city: str = "") -> tuple:
     try:
         if straight < 1.5:
             d = _get("/direction/walking", origin=origin, destination=dest)
-            dur = d["route"]["paths"][0]["duration"]
-            res = ["步行", max(5, int(dur) // 60)]
+            mins = int(float(d["route"]["paths"][0]["duration"])) // 60
+            # 走路超过半小时基本等于"没打算走过去"(可能要绕山/跨江),改打车
+            res = ["打车", _drive_min(a, b)] if mins > WALK_MAX_MIN else ["步行", max(5, mins)]
         else:
-            d = _get("/direction/transit/integrated", origin=origin, destination=dest,
-                     city=city, cityd=city, strategy=0, nightflag=0)
-            dur = d["route"]["transits"][0]["duration"]
-            res = ["地铁", max(8, int(float(dur)) // 60)]
+            drive = transit = None
+            try:
+                drive = _drive_min(a, b)
+            except Exception:
+                pass
+            try:
+                d = _get("/direction/transit/integrated", origin=origin, destination=dest,
+                         city=city, cityd=city, strategy=0, nightflag=0)
+                tr = d["route"]["transits"][0]
+                mins = int(float(tr.get("duration") or 0)) // 60
+                if mins > 0 and float(tr.get("walking_distance") or 0) <= TRANSIT_MAX_WALK_M:
+                    transit = max(8, mins)
+            except Exception:
+                pass
+            # 公交比打车慢一大截时,游客不会坐;差得不多时地铁更划算。
+            # 只按这一条裁定,别再叠加别的规则 —— 通勤时间虚高会让每天白少排一个点。
+            if transit and (drive is None or transit <= drive * TRANSIT_OK_RATIO):
+                res = ["地铁", transit]
+            elif drive is not None:
+                res = ["打车", drive]
+            else:
+                raise ValueError("transit/driving 都没拿到")
     except Exception:
         return estimate_route(a, b)     # 失败不缓存,下一次还有机会拿到真值
 
