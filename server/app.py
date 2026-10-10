@@ -20,6 +20,7 @@ from pydantic import BaseModel                         # noqa: E402
 import amap                                            # noqa: E402
 import planner                                         # noqa: E402
 import store                                           # noqa: E402
+import wish                                            # noqa: E402
 from data import CITY_NAMES                            # noqa: E402
 
 app = FastAPI(title="行程规划后端")
@@ -39,6 +40,8 @@ class PlanReq(BaseModel):
     pace: str = "适中"
     fresh: bool = False        # 「重新生成」时传 true,跳过缓存重新叫一次大模型
     base: Optional[dict] = None  # 落脚点 {name, lat, lng},没有就是每天凭空开始
+    # 用户收藏的景点名(只对当前城市生效)。命中就优先排入,排不下会连同原因返回。
+    wish: List[str] = []
 
 
 class ReplanReq(BaseModel):
@@ -54,6 +57,27 @@ class ChatReq(BaseModel):
     pace: str = "适中"
     prefs: List[str] = []
     base: Optional[dict] = None
+
+
+class WishReq(BaseModel):
+    """想去的地方。kind=city 是"这座城我还没去",kind=poi 是"这个点我想去"。
+
+    注意:pydantic 模型只收这里声明过的字段,漏一个就永久丢失 ——
+    自动补全带回来的详细地址曾经就是因为没写这一行,前端存了、落库变成空字符串。
+    """
+    kind: str = "city"
+    name: str
+    city: str = ""
+    lat: float = 0
+    lng: float = 0
+    note: str = ""
+    addr: str = ""          # 详细地址(从地图候选里选中时才有)
+    done: bool = False
+
+
+class WishMarkReq(BaseModel):
+    id: str
+    done: bool = True
 
 
 @app.get("/api/health")
@@ -102,7 +126,10 @@ def places(city: str, kw: str, limit: int = 8):
     kw = (kw or "").strip()
     if len(kw) < 1:
         return {"places": [], "live": True}
-    return {"places": amap.search_place(city, kw, max(1, min(limit, 10))), "live": True}
+    # 城市为空时不锁城市:用户手打景点名时常常还没决定城市,锁了就一条都搜不到
+    c = (city or "").strip()
+    return {"places": amap.search_place(c, kw, max(1, min(limit, 10)),
+                                        strict=bool(c)), "live": True}
 
 
 @app.get("/api/rgeo")
@@ -118,6 +145,30 @@ def rgeo(loc: str):
     return got
 
 
+@app.get("/api/wish")
+def wish_list():
+    return {"items": wish.list_all()}
+
+
+@app.post("/api/wish")
+def wish_add(req: WishReq):
+    """新增或合并(同一个 kind+city+name 只留一条)。返回完整清单,省得前端再拉一次。"""
+    if not (req.name or "").strip():
+        raise HTTPException(400, "name 不能为空")
+    return {"items": wish.add(req.dict())}
+
+
+@app.delete("/api/wish")
+def wish_del(id: str):
+    return {"items": wish.remove(id)}
+
+
+@app.post("/api/wish/mark")
+def wish_mark(req: WishMarkReq):
+    """标记去过 / 撤回去过。"""
+    return {"items": wish.mark(req.id, req.done)}
+
+
 @app.post("/api/plan")
 def plan(req: PlanReq):
     days = max(1, min(req.days, 5))
@@ -127,7 +178,7 @@ def plan(req: PlanReq):
     if amap.probe() and not pool:
         raise HTTPException(503, f"高德未返回「{req.city}」的候选点,请检查城市名或 Key 额度")
     return planner.build_plan(req.city, days, req.prefs, pace, pool, fresh=req.fresh,
-                              base=req.base)
+                              base=req.base, wish=req.wish)
 
 
 @app.post("/api/plan_stream")
@@ -169,7 +220,8 @@ def plan_stream(req: PlanReq):
                 raise HTTPException(
                     503, f"高德未返回「{req.city}」的候选点,请检查城市名或 Key 额度")
             plan = planner.build_plan(req.city, days, req.prefs, pace, pool,
-                                      fresh=req.fresh, emit=emit, base=req.base)
+                                      fresh=req.fresh, emit=emit, base=req.base,
+                                      wish=req.wish)
             emit({"type": "done", "plan": plan, "pct": 1.0})
         except Exception as e:                          # 进度流里报错也要告诉前端
             emit({"type": "error", "msg": str(e) or type(e).__name__})

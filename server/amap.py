@@ -211,18 +211,24 @@ def geocode(city: str):
     return lat, lng
 
 
-def search_place(city: str, kw: str, limit: int = 8) -> list:
+def search_place(city: str, kw: str, limit: int = 8, strict: bool = True) -> list:
     """在本市按关键词找地点 —— 落脚点专用。
 
     落脚点不是景点:酒店、民宿、小区、地铁站、机场都可能是,所以这里**不过 is_sight**
     (那条规则本来就是要滤掉住宿服务大类的)。返回值只带编排要用到的最小字段。
+
+    strict=False 时不限制城市。前端给它留了个用处:用户在想去页手打一个景点名,
+    还没决定属于哪座城 —— 这时候不能因为 city 空着就查不出东西。
     """
     kw = (kw or "").strip()
     if not LIVE or not kw:
         return []
+    args = dict(keywords=kw, offset=min(max(limit, 1), 10), page=1,
+                extensions="base")
+    if city:
+        args.update(city=city, citylimit="true" if strict else "false")
     try:
-        d = _get("/place/text", keywords=kw, city=city, citylimit="true",
-                 offset=min(max(limit, 1), 10), page=1, extensions="base")
+        d = _get("/place/text", **args)
     except Exception:
         return []
     if str(d.get("status")) != "1":
@@ -242,6 +248,9 @@ def search_place(city: str, kw: str, limit: int = 8) -> list:
         seg = [s for s in (raw.get("type") or "").replace("|", ";").split(";") if s]
         out.append({"name": name, "lat": lat, "lng": lng,
                     "addr": (raw.get("address") or "").strip(),
+                    # 地点所属城市。没填城市就搜的情况下靠它回填 city 字段 ——
+                    # 城市空着的收藏在生成行程时认不出属于哪座城,等于白加。
+                    "city": (raw.get("cityname") or raw.get("adname") or "").strip(),
                     "type": seg[-1] if seg else ""})
         if len(out) >= limit:
             break

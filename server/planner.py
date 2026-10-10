@@ -41,6 +41,14 @@ START_MIN = 9 * 60          # 每天 9:00 出发
 LUNCH_START = 12 * 60
 LUNCH_LEN = 60
 
+# 用户自己收藏过的景点在打分里的加权。
+# 要比"命中偏好"(+14)高得多 —— 那是勾选来的,这是专门攒的,意愿更强。
+# 但它只是一道加分,不是钉死:后面 split_days 的预算/跨区/单段上限照样能把它挡下来,
+# 这正是"优先排入,但不硬塞"想要的 —— 收藏不会因为绕路把行程毁掉。
+WISH_BOOST = 40
+# 喂给模型时也要加权,否则收藏的点评分不高会被截断在候选之外,模型根本看不见它。
+WISH_PROMPT_BOOST = 3.0
+
 
 # ---------- 编排 ----------
 
@@ -54,10 +62,16 @@ def _median_center(pool: list):
     return (lats[n // 2], lngs[n // 2])
 
 
-def score(pool: list, prefs: list) -> list:
+def score(pool: list, prefs: list, wish: list = None) -> list:
+    """候选池打分排序。高分的先被 split_days 取作每天的种子,也就更可能排进行程。
+
+    wish 是用户收藏的景点名:命中就加权,让收藏优先成为种子。它只影响顺序,
+    不绕过时间预算与跨区约束 —— 收藏不该把行程排成绕路。
+    """
     want = []
     for p in prefs:
         want += PREF_TAGS.get(p, [])
+    wset = {_norm_name(x) for x in (wish or [])}
     center = _median_center(pool)
     out = []
     for poi in pool:
@@ -65,6 +79,8 @@ def score(pool: list, prefs: list) -> list:
         for t in poi["tags"]:
             if t in want:
                 s += 14
+        if _norm_name(poi.get("name")) in wset:
+            s += WISH_BOOST
         if center and amap.haversine(poi["lat"], poi["lng"], center[0], center[1]) > 25:
             s -= 6      # 远郊点往后排:刚到一个城市,不该第一天就跑几十公里
         out.append((poi, s))
@@ -234,6 +250,93 @@ def layout_timeline(ordered: list, city: str, base: dict = None,
     return {"items": ordered, "timeline": nodes, "end": t}
 
 
+def _leg_min(a: dict, b: dict, city: str) -> int:
+    """一段通勤的分钟数,拿不到就当 0(不能因为拿不到就整段崩掉)。"""
+    try:
+        return int(amap.route_time(a, b, city)[1])
+    except Exception:
+        return 0
+
+
+def _worth(p: dict) -> float:
+    """这个点值不值得留。删点时按它排序 —— 同样省时间,先砍不值钱的。"""
+    s = float(p.get("rating") or 0) * 10
+    if p.get("hot"):
+        s += 20        # 当期限定展演,过滤掉就没了,优先保
+    return s
+
+
+def _drop_gain(ordered: list, i: int, city: str, base: dict = None):
+    """移除第 i 个点能省下多少分钟 = 绕开它的通勤差 + 它本身的游玩时长。
+
+    只多请求一段"跳接段" prev→next,其余段 layout_timeline 已经算过并进了缓存,
+    所以评估一整轮候选的额外接口开销约等于点数,几个而已。
+    """
+    n = len(ordered)
+    if n <= 1:
+        return None
+    home = bool(base and base.get("lat") and base.get("lng"))
+    p = ordered[i]
+    prev = base if (i == 0 and home) else (ordered[i - 1] if i > 0 else None)
+    nxt = base if (i == n - 1 and home) else (ordered[i + 1] if i < n - 1 else None)
+    saved = int(p.get("duration") or 0)
+    if prev is not None and nxt is not None:
+        saved += (_leg_min(prev, p, city) + _leg_min(p, nxt, city)
+                  - _leg_min(prev, nxt, city))
+    elif prev is not None:
+        saved += _leg_min(prev, p, city)
+    elif nxt is not None:
+        saved += _leg_min(p, nxt, city)
+    return max(0, saved)
+
+
+def fit_budget(ordered: list, city: str, budget: int = None, base: dict = None,
+               pace: str = "适中", max_drop: int = 2, min_keep: int = 2,
+               on_move=None) -> dict:
+    """用真实通勤校验当天预算,超了就从当天摘掉性价比最低的点,最多摘 max_drop 个。
+
+    为什么需要这一步:分组时用 estimate_route 估算,真正铺时间轴时才请求真实
+    路径接口 —— 真实通勤几乎总比估算长,于是"预算 9 小时"的一天落地后可能
+    拖到 20:00 才结束。以前没人管这个差,现在用真实结果兜底。
+
+    摘谁不是简单砍最后一个:对每个点算"去掉它能省几分钟",在所有能压回预算的
+    候选里挑价值(_worth)最低的;一个都压不回来就挑省时间最多的那个,再迭代一轮。
+    """
+    if budget is None:
+        budget = BUDGET.get(pace, 9 * 60)
+    cur = list(ordered)
+    res = layout_timeline(cur, city, base=base, on_move=on_move)
+    dropped = []          # 攒在循环外:每次重算都换一个新 dict,挂在 res 上会丢
+    for _ in range(max_drop):
+        if len(cur) <= min_keep:
+            break
+        span = res["end"] - START_MIN
+        if span <= budget:
+            break
+        cands = []
+        for i in range(len(cur)):
+            g = _drop_gain(cur, i, city, base)
+            if g is None:
+                continue
+            cands.append((i, g, span - g))       # (下标, 能省, 删后时长)
+        if not cands:
+            break
+        ok = [c for c in cands if c[2] <= budget]
+        if ok:                                    # 能压回预算的里,砍最不值的
+            pick = min(ok, key=lambda c: _worth(cur[c[0]]))
+        else:                                     # 都压不回,砍省时间最多的
+            pick = max(cands, key=lambda c: (c[1], -_worth(cur[c[0]])))
+        gone = cur[pick[0]]
+        cur = cur[:pick[0]] + cur[pick[0] + 1:]
+        # 重算只走缓存,不再上报进度,免得进度条来回滚
+        res = layout_timeline(cur, city, base=base)
+        dropped.append({"name": gone.get("name"), "id": gone.get("id"),
+                        "min": pick[1]})
+    if dropped:
+        res["dropped"] = dropped
+    return res
+
+
 def compute_day(items: list, city: str, base: dict = None) -> dict:
     """生成当天时间轴(规则版:空间最近邻 + 夜景置后)。
 
@@ -249,15 +352,19 @@ def compute_day(items: list, city: str, base: dict = None) -> dict:
     return layout_timeline(ordered, city, base)
 
 
-def _plan_key(city: str, days: int, prefs: list, pace: str, base: dict = None) -> str:
+def _plan_key(city: str, days: int, prefs: list, pace: str, base: dict = None,
+              wish: list = None) -> str:
     """同一组输入就是同一份行程 —— 重复生成没必要再烧一次大模型和路径规划。
     v2:AI 综合规划版(选择/分组/排序/经典特色均由模型给出),与旧的规则版缓存区分开。
     v3:再叠一层联网热点。必须换 key —— 否则命中 v2 的旧缓存,热点完全体现不出来。
     v4:再加落脚点。落脚点不同则每天的出发/回程通勤都不一样,必须各自缓存 ——
        这也是为什么 key 里只放地点名:坐标小数位漂移不该导致缓存永远不命中。
+    v5:再加心愿清单。收藏的内容不一样,排出来的行程就不一样,不能共用同一份缓存 ——
+       否则用户新收一个地方再生成,命中的还是那份没带收藏的旧行程,他会以为功能没生效。
     """
     b = (base or {}).get("name") or "-"
-    return f'v4|{city}|{days}|{",".join(sorted(prefs or []))}|{pace}|{b}'
+    w = ",".join(sorted({_norm_name(x) for x in (wish or [])}))
+    return f'v5|{city}|{days}|{",".join(sorted(prefs or []))}|{pace}|{b}|{w}'
 
 
 # ---------- AI 综合规划 ----------
@@ -276,6 +383,7 @@ PLAN_PROMPT = """你是一位资深旅行行程规划师。下面是一座城市
 候选景点(每行一个,name | 类型 | 评分 | 建议游玩分钟 | 最佳时段 | 人均 | 室内/室外 | 距落脚点 | 坐标 | 临近景点):
 {pois}
 {hot}
+{wish}
 要求:
 1. 只从上述候选里挑选,不要编造任何景点。每天点数大致符合节奏。
 2. 同一天的景点要在地理上尽量紧凑(用坐标与"临近"信息判断,避免跨城折返);夜景/傍晚类(最佳时段含"傍晚/夜间")放当天最后;户外/自然类尽量排上午或下午、避开正午暴晒;上午类排前面。
@@ -285,6 +393,10 @@ PLAN_PROMPT = """你是一位资深旅行行程规划师。下面是一座城市
 6. 若有"当下热点"段落:这批是联网核实过、确在地图上的当下热点,请尽量安排进合适的一天
    —— 限时展演务必留意它的有效期,季节景观要对得上季节。写"经典特色"时要点出它此刻特别
    值得去的理由。但它们是加分项:不要为了让位给热点而挤掉这座城市真正的地标与经典景点。
+7. 若有"用户收藏"段落:那是用户自己攒的、一直想去的地方,候选里标了 [你收藏过]。
+   请优先把它们排进行程 —— 这是他明确表达过的意愿,权重高于普通高分景点。
+   但第 2 条的地理紧凑仍然优先:要是某个收藏离当天其他点太远、排进去会明显绕路,
+   就别硬塞,让它留给别的机会,行程整体的顺畅比单点意愿更重要。
 
 只输出如下结构的 JSON,不要任何解释文字、不要代码块标记:
 {{
@@ -302,16 +414,19 @@ def _norm_name(s: str) -> str:
 
 
 def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
-                       hot: dict = None, base: dict = None) -> str:
+                       hot: dict = None, base: dict = None, wish: list = None) -> str:
     """挑出要喂给模型的候选(按评分 + 偏好加权截断到可控规模),并附上临近景点提示,
     让模型有地理聚类所需的上下文。
 
     hot: hotspots.discover() 的结果。热点额外加权,否则新开的展/馆评分不高,
     会被截断在这批候选之外 —— 模型根本看不到它们。
+    wish: 用户收藏的景点名。同理要加权,而且必须顶到候选最前面 —— 收藏的点未必高分,
+    按评分排序再截断的话它第一个被切掉,模型连看都看不见它。
     """
     want = []
     for p in prefs or []:
         want += PREF_TAGS.get(p, [])
+    wset = {_norm_name(x) for x in (wish or [])}
     scored = []
     for p in pool:
         s = p["rating"]
@@ -319,11 +434,16 @@ def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
             s += 0.6
         if p.get("hot"):
             s += 2.0          # 当下热点:评分再低也要进模型视野
+        if _norm_name(p.get("name")) in wset:
+            s += WISH_PROMPT_BOOST
         scored.append((s, p))
     scored.sort(key=lambda x: x[0], reverse=True)
     top = [p for _, p in scored[:30]]
     extra = [p for _, p in scored[30:] if any(t in want for t in p.get("tags", []))]
-    sel = (top + extra)[:45]
+    # 收藏顶到最前:45 条是从前往后切的,排在后面等于白收藏
+    ordered = top + extra
+    sel = ([p for p in ordered if _norm_name(p["name"]) in wset]
+           + [p for p in ordered if _norm_name(p["name"]) not in wset])[:45]
 
     # 预计算临近景点,给模型地理聚类依据
     nb = {}
@@ -336,6 +456,8 @@ def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
     for p in sel:
         near = ", ".join(f"{n}({d}km)" for n, d in nb[p["id"]])
         flag = "[当下热点] " if p.get("hot") else ""
+        if _norm_name(p["name"]) in wset:
+            flag += "[你收藏过] "
         # 到落脚点的直线距离。直线而非路程是因为这条路模型没法算准确,而"远不远"
         # 只需要个量级;真正的通勤时间仍由路径规划接口落地,不交给模型。
         far = ""
@@ -351,6 +473,7 @@ def _build_plan_prompt(city: str, pool: list, days: int, prefs: list, pace: str,
                               prefs=", ".join(prefs) if prefs else "（无特别偏好）",
                               pois="\n".join(lines),
                               hot=_hot_section(hot, sel),
+                              wish=_wish_section(wish, sel),
                               base=_base_text(base),
                               base_req=_base_req(base))
 
@@ -392,15 +515,28 @@ def _hot_section(hot: dict, sel: list) -> str:
             + body + "\n")
 
 
+def _wish_section(wish: list, sel: list) -> str:
+    """给模型看的收藏段落。只列已经在候选里出现的 —— 候选里没有的名字列出来
+    只会勾着模型去硬编一个不存在的地方,那正好是这个方案一直在防的事。"""
+    if not wish:
+        return ""
+    wset = {_norm_name(x) for x in wish}
+    rows = [p["name"] for p in sel if _norm_name(p["name"]) in wset]
+    if not rows:
+        return ""
+    return ("\n用户收藏(他自己攒的、一直想去的地方,请优先安排):\n"
+            + "\n".join(f"- {n}" for n in rows) + "\n")
+
+
 def ai_plan(city: str, pool: list, days: int, prefs: list, pace: str, hot: dict = None,
-            base: dict = None):
+            base: dict = None, wish: list = None):
     """让大模型综合候选池给出:分组(哪天去哪几个)、顺序、每点经典特色与排布理由。
 
     返回 dict 或 None(网络/解析失败时返回 None,由调用方回退到规则版)。
     注意:模型只能从 pool 里挑,返回的景点名必须能在 pool 中匹配到,匹配不上的直接丢弃,
     因此绝不会把不存在的景点排进行程。"""
     try:
-        raw = llm.ask_json(_build_plan_prompt(city, pool, days, prefs, pace, hot, base),
+        raw = llm.ask_json(_build_plan_prompt(city, pool, days, prefs, pace, hot, base, wish),
                           max_tokens=1800, timeout=40)
     except Exception as e:
         import logging
@@ -439,12 +575,17 @@ def ai_plan(city: str, pool: list, days: int, prefs: list, pace: str, hot: dict 
 
 
 def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
-               fresh: bool = False, emit=None, base: dict = None) -> dict:
+               fresh: bool = False, emit=None, base: dict = None,
+               wish: list = None) -> dict:
     """生成完整行程。emit(dict) 用于向前端推送真实进度事件,没传就完全静默。
 
     base 是落脚点 {name, lat, lng}:给了就每天从这里出发、回到这里,并且 AI 编排
     时会参考它到各点的距离。没有落脚点的行程默认从第一站开始,这在换了住处、
     通勤动辄四五十分钟的城市里,时间点是不准的。
+
+    wish 是用户收藏的景点名列表(只对当前城市生效)。命中就加权、优先排入,
+    但时间预算 / 跨区 / 单段上限这些约束照旧生效 —— 排不下的会连同原因一并返回
+    (wish_miss),前端如实告诉用户,绝不假装排进去了。
 
     各阶段的 pct 区间是估的:
 
@@ -464,7 +605,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
             except Exception:
                 pass
 
-    key = _plan_key(city, days, prefs, pace, base)
+    key = _plan_key(city, days, prefs, pace, base, wish)
     if not fresh:
         got = store.read("plan", key)
         if isinstance(got, dict) and got.get("days"):
@@ -507,7 +648,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     groups, day_notes, summary = None, [], ""
     if MODEL_LIVE:
         _emit("ai", "AI 正在综合特色、时段、体力编排行程", 0.52)
-        res = ai_plan(city, pool, days, prefs, pace, hot, base)
+        res = ai_plan(city, pool, days, prefs, pace, hot, base, wish)
         if res:
             groups, day_notes, summary = res["groups"], res["day_notes"], res["summary"]
             # 把模型给的经典特色落盘,下次 /api/pois、replan 也能复用
@@ -521,7 +662,7 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     if not groups:
         # 规则版兜底:评分排序 → 最近邻贪心分组 → 时间轴
         _emit("ai", "按评分与偏好分组", 0.60)
-        ranked = score(pool, prefs)
+        ranked = score(pool, prefs, wish)
         groups = split_days(ranked, days, per, pace)
         day_notes = [""] * len(groups)
         _emit("ai", "分组完成", 0.72)
@@ -549,23 +690,58 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
     _emit("route", "计算站间真实通勤时间", 0.73)
 
     def _make_move_cb(offset):
-        """layout_timeline 的计数是每天内部从 0 开始,这里折算成全局进度。"""
+        """layout_timeline 的计数是每天内部从 0 开始,这里折算成全局进度。
+
+        取 max 是防回退:fit_budget 可能删点重算,回算的那次段数更少,
+        进度条如果跟着往回缩,用户看着会以为卡了。
+        """
         def cb(done_in_day, _total_in_day):
             nonlocal done_move
-            done_move = offset + done_in_day
+            done_move = max(done_move, offset + done_in_day)
             if total_move:
                 _emit("route", f"通勤计算 {done_move}/{total_move} 段",
-                      0.73 + 0.22 * done_move / total_move)
+                      0.73 + 0.22 * min(1.0, done_move / total_move))
         return cb
 
+    dropped_ids = set()
     for i, g in enumerate(groups):
-        d = layout_timeline(g, city, base=base, on_move=_make_move_cb(done_move))
+        # 用真实通勤校验当天预算,超时就摘点(见 fit_budget)
+        d = fit_budget(g, city, base=base, pace=pace,
+                       on_move=_make_move_cb(done_move))
         d["day"] = i + 1
         d["note"] = day_notes[i] if i < len(day_notes) else ""
         plan_days.append(d)
+        for x in (d.get("dropped") or []):
+            if x.get("id"):
+                dropped_ids.add(x["id"])
     _emit("route", f"通勤时间已落地,共 {total_move} 段", 0.95)
 
     _emit("save", "整理每日安排与出行建议", 0.97)
+
+    # 收藏兑现情况:排进去了要让前端标出来(那是用户自己攒的),排不进去必须给个说法。
+    # 默默吞掉是最糟的情况 —— 用户是带着期待点的收藏,他会以为这个功能根本没生效。
+    used_names = {_norm_name(p["name"]) for d in plan_days for p in (d.get("items") or [])}
+    in_pool = {}
+    for p in pool:
+        in_pool.setdefault(_norm_name(p["name"]), p)
+    wish_hit, wish_miss = [], []
+    for w in (wish or []):
+        n = _norm_name(w)
+        if n in used_names:
+            wish_hit.append(w)
+            continue
+        p = in_pool.get(n)
+        if not p:
+            wish_miss.append({"name": w, "reason": "这座城的候选里还没有它"})
+            continue
+        # 在候选池里、却没排进行程:要说清楚卡在哪一步 ——
+        # 是离已排的动线太远,还是当天的时间预算被别的点占满了。
+        near_any = any(
+            amap.haversine(p["lat"], p["lng"], q["lat"], q["lng"]) <= NEIGHBOR_KM
+            for d in plan_days for q in (d.get("items") or []))
+        wish_miss.append({"name": w, "reason": (
+            "离已排的动线太远,排进去要多绕路" if not near_any
+            else "当天时间预算排满了,这次没排下")})
 
     plan = {
         "city": city,
@@ -575,7 +751,10 @@ def build_plan(city: str, days: int, prefs: list, pace: str, pool: list = None,
         "summary": summary,
         "advice": make_advice(plan_days, city),
         "hot_notes": hot_notes,
-        "pool": [p for p in pool if p["id"] not in used],
+        "wish_hit": wish_hit,
+        "wish_miss": wish_miss,
+        # 被 fit_budget 摘掉的点不算"已用",放回备选池,用户可以手动加回来
+        "pool": [p for p in pool if p["id"] not in used or p["id"] in dropped_ids],
         "live": amap.LIVE,
         "model": MODEL_LIVE,
         "cached": False,

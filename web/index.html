@@ -6,259 +6,589 @@
 <title>行程规划 · 交互原型</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+/* ============================================================
+   DESIGN TOKENS v2
+   方向:现代旅行 —— 干净底 + 深色品牌 + 鲜活强调
+   高对比度 · 充足留白 · 统一圆角 · 真实层次阴影
+   ============================================================ */
 :root{
-  --bg:#EFF1EE; --card:#FFFFFF; --line:#E7E9E5; --soft:#F5F6F4;
-  --tx:#181A17; --tx2:#676B65; --tx3:#9DA09A;
-  --brand:#0F7A57; --brand-soft:#E4F2EB; --brand-line:#B7DFCC;
-  --warn:#9A5B12; --warn-soft:#FBEFDC;
+  /* —— 表面(从深到浅,层次清晰) —— */
+  --desk:#1A1A1A;            /* 外壳桌面:纯深,让手机成为焦点 */
+  --paper:#F7F6F2;           /* 主底:暖白,不再米黄 */
+  --paper-2:#EFEEE8;         /* 凹陷面/次级底 */
+  --card:#FFFFFF;            /* 卡片:纯白,和底拉开明暗差 */
+  --soft:#F2F1EC;            /* 灰底填充 */
+  --line:#E5E3DD;            /* 分隔线:更淡 */
+  --line-soft:#EEEEE8;       /* 更淡的分隔线 */
+
+  /* —— 文字(高对比度,全部 ≥7:1) —— */
+  --tx:#1A1A1A;
+  --tx1:#333333;
+  --tx2:#5C5C5C;
+  --tx3:#8C8C8C;
+
+  /* —— 主色 30%:深松绿 —— */
+  --brand:#1B4332;
+  --brand-2:#2D6A4F;
+  --brand-soft:#E8F5EC;
+  --brand-line:#C3E6CB;
+
+  /* —— 强调 10%:暖珊瑚(更鲜活,不再暗沉) —— */
+  --accent:#E76F51;
+  --accent-2:#F4A261;
+  --accent-soft:#FDEDE7;
+  --accent-line:#F5D5C8;
+
+  /* —— 辅助 —— */
+  --warn:#9A5316; --warn-soft:#FDF3E7;
+  --gold:#B7791F; --gold-soft:#FAF3E0;
+  --bg:var(--paper);
+
+  /* —— 字体 —— */
+  --fd:"Noto Serif SC","Songti SC","STSong","Source Han Serif SC",SimSun,serif;
+  --fb:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+
+  /* —— 间距梯度 4/8/12/16/20/24/32/48 —— */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:48px;
+
+  /* —— 圆角(统一,不再不对称) —— */
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px;
+
+  /* —— 三级阴影(Material 3 风格,有真实深度) —— */
+  --sh1:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sh2:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
+  --sh3:0 24px 48px rgba(0,0,0,.16),0 8px 24px rgba(0,0,0,.08);
+
+  /* —— 动效 —— */
+  --ease:cubic-bezier(.16,1,.3,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --dur:.4s;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-  background:var(--bg);color:var(--tx);display:flex;justify-content:center;padding:24px 16px}
+
+html{background:var(--desk)}
+body{font-family:var(--fb);
+  background:var(--desk);color:var(--tx);display:flex;justify-content:center;padding:24px 16px;min-height:100vh;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::selection{background:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+
 .stage{display:flex;gap:28px;align-items:flex-start}
-.phone{width:390px;height:844px;background:var(--card);border-radius:42px;border:1px solid #DCDCD8;
-  box-shadow:0 12px 40px rgba(0,0,0,.10);display:flex;flex-direction:column;overflow:hidden;position:relative;flex:none}
-.status{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:500;flex:none}
+/* 手机外壳:干净白底 + 细边,浮在深色桌面上 */
+.phone{width:390px;height:844px;background:var(--paper);border-radius:40px;
+  border:1px solid #333;
+  box-shadow:var(--sh3);
+  display:flex;flex-direction:column;overflow:hidden;position:relative;flex:none}
+.status{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;
+  font-size:13px;font-weight:600;flex:none;color:var(--tx);font-variant-numeric:tabular-nums;
+  background:var(--paper)}
 .status .rt{display:flex;gap:4px;align-items:center}
 .status i{width:4px;height:4px;border-radius:50%;background:var(--tx);display:block}
 .status i:nth-child(3){height:8px;width:8px;border-radius:2px}
-.body{flex:1;overflow-y:auto;overflow-x:hidden}
+.body{flex:1;overflow-y:auto;overflow-x:hidden;background:var(--paper)}
 .body::-webkit-scrollbar{width:0}
 .page{display:none;padding:0 0 24px}
 .page.on{display:block}
 
-.appbar{padding:6px 20px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:5}
-.appbar h1{font-size:20px;font-weight:500;letter-spacing:-.2px}
-.appbar .sub{font-size:12px;color:var(--tx3);margin-top:2px}
-.badge{font-size:11px;padding:4px 9px;border-radius:20px;background:var(--soft);color:var(--tx2);border:1px solid var(--line);white-space:nowrap}
+/* ---------- 报头:干净的白底吸顶,底部细线分隔 ---------- */
+.appbar{padding:8px 20px 12px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:5;
+  background:var(--card);
+  box-shadow:0 1px 0 var(--line)}
+.appbar h1{font-family:var(--fd);font-size:24px;font-weight:700;letter-spacing:-.5px;line-height:1.2}
+.appbar .sub{font-size:13px;color:var(--tx3);margin-top:4px}
+.badge{font-size:11px;padding:4px 10px;border-radius:var(--r-full);background:var(--soft);color:var(--tx2);
+  border:1px solid var(--line);white-space:nowrap;font-weight:600;letter-spacing:.3px}
 .badge.live{background:var(--brand-soft);color:var(--brand);border-color:var(--brand-line)}
 
 .pad{padding:0 20px}
-.sec{margin-top:22px}
-.sec>.lb{font-size:12px;color:var(--tx3);margin-bottom:10px;letter-spacing:.3px}
+.sec{margin-top:20px}
+/* 小标题:干净的无衬线标签 */
+.lb{font-size:13px;color:var(--tx2);line-height:1.5;font-weight:600}
+.sec>.lb{font-size:12px;color:var(--tx3);margin-bottom:12px;letter-spacing:.5px;font-weight:600;
+  text-transform:uppercase}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{font-size:13px;padding:8px 14px;border-radius:20px;background:var(--soft);border:1px solid var(--line);color:var(--tx2);cursor:pointer;transition:.15s}
-.chip.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:500}
+.chips.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips.scroll::-webkit-scrollbar{height:0}
+.chips.scroll .chip{flex:none;white-space:nowrap}
+/* 标签:现代药丸形 */
+.chip{font-size:13px;padding:8px 14px;border-radius:var(--r-full);background:var(--card);
+  border:1px solid var(--line);color:var(--tx2);cursor:pointer;
+  transition:all .18s var(--ease);font-weight:500}
+.chip:active{transform:scale(.96)}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 
-.loc{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--soft);border:1px solid var(--line);border-radius:14px;cursor:pointer}
-.loc .ic{width:32px;height:32px;border-radius:10px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;flex:none}
-.loc .ic svg{width:16px;height:16px}
-.loc .t1{font-size:15px;font-weight:500}
-.loc .t2{font-size:12px;color:var(--tx3);margin-top:1px}
-.loc .chg{margin-left:auto;font-size:12px;color:var(--brand)}
+/* 设置行:白色卡片 + 左侧色条 */
+.loc{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r-md);
+  cursor:pointer;box-shadow:var(--sh1);transition:box-shadow .18s var(--ease)}
+.loc:active{box-shadow:var(--sh1);transform:scale(.99)}
+.loc .ic{width:36px;height:36px;border-radius:var(--r-md);background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.loc .ic svg{width:18px;height:18px}
+.loc .t1{font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:-.2px}
+.loc .t2{font-size:12px;color:var(--tx3);margin-top:2px}
+.loc .chg{margin-left:auto;font-size:13px;color:var(--accent);font-weight:600}
 
-.btn{width:100%;padding:15px;border-radius:14px;background:var(--brand);color:#fff;font-size:15px;font-weight:500;border:none;cursor:pointer;margin-top:26px;font-family:inherit}
-.btn:active{opacity:.85}
+/* 行程页就地调参:白色卡片,干净利落 */
+.tune{margin:12px 20px 0;border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--card);box-shadow:var(--sh1);overflow:hidden}
+.tn-head{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer}
+.tn-t{flex:1;min-width:0}
+.tn-t b{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:-.2px;display:block}
+.tn-t span{display:block;font-size:12px;color:var(--tx3);margin-top:2px;line-height:1.4}
+.tn-caret{font-size:13px;color:var(--brand);font-weight:600;flex:none;padding:4px 2px}
+.tn-body{padding:4px 16px 16px;border-top:1px solid var(--line-soft)}
+.tn-row{display:flex;align-items:center;gap:12px;margin-top:14px}
+.tn-k{font-size:12px;color:var(--tx2);flex:none;width:36px;font-weight:600}
+.tn-row>.days{flex:1;margin:0}
+.tn-row>.chips{flex:1;margin:0;display:flex;flex-wrap:wrap}
+.tn-row>.chips.scroll{flex-wrap:nowrap;overflow-x:auto}
+.tn-ft{margin-top:14px;font-size:12px}
+.tn-ft .tn-tip{color:var(--tx3)}
+.tn-ft .tn-wait{color:var(--accent);font-weight:600}
+.tn-ft .tn-wait:before{content:"↻ ";display:inline-block}
+.dense .tune{display:none}
+/* 首页「接着上次的走」:深色卡片,视觉焦点 */
+.resume{padding:16px 18px;border-radius:var(--r-md);background:var(--brand);
+  color:#E8F5EC;box-shadow:var(--sh2);display:flex;align-items:center;gap:14px}
+.rs-t{flex:1;min-width:0}
+.rs-t b{display:block;font-family:var(--fd);font-size:17px;font-weight:700;
+  color:#fff;letter-spacing:-.3px}
+.rs-t span{display:block;font-size:12px;color:#A8D5BA;margin-top:4px;
+  line-height:1.4}
+.rs-a{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+.rs-go{font-size:13px;font-weight:600;color:var(--brand);background:#fff;
+  border:none;border-radius:var(--r-full);padding:7px 16px;cursor:pointer;
+  transition:transform .15s var(--ease)}
+.rs-go:active{transform:scale(.95)}
+.rs-no{font-size:11px;color:#A8D5BA;cursor:pointer}
+
+/* 主 CTA:珊瑚色实心,圆角,有按下反馈 */
+.btn{width:100%;padding:15px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:15px;
+  font-weight:600;letter-spacing:-.2px;border:none;cursor:pointer;margin-top:26px;font-family:inherit;
+  box-shadow:0 4px 12px rgba(231,111,81,.3);transition:all .15s var(--ease)}
+.btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn:active{opacity:.9;transform:translateY(0)}
+.btn[style]{box-shadow:none;font-weight:500;letter-spacing:0}
 
 .days{display:flex;gap:8px}
-.dayc{flex:1;text-align:center;padding:11px 0;border-radius:12px;background:var(--soft);border:1px solid var(--line);font-size:14px;color:var(--tx2);cursor:pointer}
-.dayc.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:500}
+.dayc{flex:1;text-align:center;padding:12px 0;border-radius:var(--r-md);background:var(--card);
+  border:1px solid var(--line);font-size:14px;color:var(--tx2);cursor:pointer;
+  transition:all .18s var(--ease);font-weight:500}
+.dayc:active{transform:scale(.96)}
+.dayc.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 
-/* 行程页:标题栏 + 天数栏合成一块吸顶。两个各自 sticky 会互相压,合成一块才不会。 */
-.triphead{position:sticky;top:0;z-index:6;background:var(--card);box-shadow:0 3px 10px rgba(0,0,0,.05)}
-#p-trip .appbar{position:static;padding:10px 20px 4px}
-#p-trip .tabs{position:static;padding:2px 20px 10px}
+/* 行程页:标题栏 + 天数栏合成一块吸顶 */
+.triphead{position:sticky;top:0;z-index:6;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+#p-trip .appbar{position:static;padding:8px 20px 4px;background:none;box-shadow:none}
+#p-trip .appbar h1{font-size:22px}
+#p-trip .tabs{position:static;padding:2px 20px 8px}
 #p-trip .appbar .sub{max-height:40px;overflow:hidden;transition:max-height .18s ease,opacity .14s ease}
 .triphead.mini .appbar .sub{max-height:0;opacity:0;margin-top:0}
 .triphead.mini .appbar{padding-bottom:2px}
-.tabs{display:flex;gap:6px;padding:12px 20px 4px;position:sticky;top:0;background:var(--card);z-index:5;overflow-x:auto}
+.tabs{display:flex;gap:8px;padding:12px 20px 4px;position:sticky;top:0;background:var(--card);z-index:5;overflow-x:auto}
 .tabs::-webkit-scrollbar{width:0}
-.tab{padding:7px 14px;border-radius:18px;font-size:13px;color:var(--tx2);background:var(--soft);border:1px solid var(--line);white-space:nowrap;cursor:pointer;flex:none}
-.tab.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:500}
+.tab{padding:7px 14px;border-radius:var(--r-full);font-size:13px;color:var(--tx2);background:var(--soft);
+  border:1px solid var(--line);white-space:nowrap;cursor:pointer;flex:none;
+  transition:all .18s var(--ease);font-weight:500}
+.tab:active{transform:scale(.96)}
+.tab.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 
+/* ---------- 时间轴 ---------- */
 .tl{padding:8px 20px 0}
-.node{position:relative;padding-left:34px;padding-bottom:20px}
-.node:before{content:"";position:absolute;left:11px;top:26px;bottom:-4px;width:1.5px;background:var(--line)}
+.node{position:relative;padding-left:34px;padding-bottom:14px}
+/* 连线:竖向虚线 */
+.node:before{content:"";position:absolute;left:11px;top:28px;bottom:-4px;width:2px;
+  background:repeating-linear-gradient(180deg,var(--line) 0 3px,transparent 3px 7px)}
 .node:last-child:before{display:none}
-.dot{position:absolute;left:0;top:8px;width:23px;height:23px;border-radius:50%;background:var(--brand);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:500}
-.dot.meal{background:#C9A227}
-.stamp{font-size:11px;color:var(--tx3);margin-bottom:5px;letter-spacing:.2px}
+/* 节点:圆角方块编号 */
+.dot{position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:var(--r-sm);background:var(--brand);
+  color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:600;
+  font-variant-numeric:tabular-nums;box-shadow:0 0 0 3px var(--paper)}
+.dot.meal{background:var(--gold)}
+.stamp{font-size:11px;color:var(--tx3);margin-bottom:5px;letter-spacing:.3px;font-variant-numeric:tabular-nums}
 
-.card{border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:var(--card)}
+/* 景点卡:纯白 + 统一圆角 + 清晰阴影 */
+.card{border:1px solid var(--line);border-radius:var(--r-md);
+  padding:13px 15px;background:var(--card);box-shadow:var(--sh1);
+  transition:box-shadow .18s var(--ease)}
 .card .hd{display:flex;align-items:flex-start;gap:8px}
-.card .nm{font-size:15px;font-weight:500;line-height:1.35;flex:1}
-.card .sc{font-size:12px;color:var(--warn);background:var(--warn-soft);padding:2px 7px;border-radius:6px;flex:none;font-weight:500}
-.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.tg{font-size:11px;color:var(--tx2);background:var(--soft);border:1px solid var(--line);padding:3px 8px;border-radius:6px}
-.tg.hl{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand);font-weight:500}
-.tg.hot{background:#fff1e8;border-color:#ffc9a8;color:#c8501a;font-weight:500}
-.hotwhy{font-size:12px;color:#c8501a;background:#fff8f3;border-left:2px solid #ffc9a8;padding:5px 8px;border-radius:0 6px 6px 0;margin-top:6px;line-height:1.5}
+.card .nm{font-family:var(--fd);font-size:16px;font-weight:700;line-height:1.35;flex:1;letter-spacing:-.2px}
+.card .sc{font-size:12px;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:var(--r-full);flex:none;font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tg{font-size:11px;color:var(--tx2);background:var(--soft);border:1px solid transparent;padding:3px 9px;border-radius:var(--r-full)}
+.tg.hl{background:var(--brand-soft);color:var(--brand);font-weight:600}
+.tg.hot{background:var(--accent-soft);color:var(--accent);font-weight:600}
+/* 收藏标用金色系:和陶土朱的"热点"、松墨绿的"偏好"都区分开,不然三个标一个色就没意义了 */
+.tg.wish{background:#FFF8E7;color:#9A7B1E;font-weight:600}
+.tg.wish:before{content:"★ ";font-size:10px}
+.node.wished>.card{border-color:#E4C88C;box-shadow:var(--sh1),0 0 0 1.5px #F0DFB8 inset}
+.hotwhy{font-size:12px;color:#8F3F12;background:var(--accent-soft);border-radius:0 0 var(--r-sm) var(--r-sm);
+  padding:6px 10px;margin-top:6px;line-height:1.5}
 .hl{font-size:12px;color:var(--brand);margin-top:8px;line-height:1.5;display:flex;align-items:flex-start;gap:5px}
 .hl:before{content:"✦";font-size:11px;margin-top:1px}
-.why{font-size:11.5px;color:var(--tx2);margin-top:7px;line-height:1.6;background:var(--soft);border-radius:9px;padding:8px 10px;border-left:3px solid var(--brand-line)}
-.why:before{content:"排布理由 · ";font-weight:600;color:var(--brand)}
-.daynote{font-size:12px;color:var(--tx1);margin-top:10px;line-height:1.6;background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:10px;padding:9px 11px}
-.daynote:before{content:"本日思路 · ";font-weight:600;color:var(--brand)}
-.pnote{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:6px 2px 2px;padding:9px 11px;background:var(--soft);border-radius:10px;border-left:3px solid #ffc9a8}
-.pnote h3{font-size:13px;font-weight:500;margin-bottom:6px;display:flex;align-items:center}
+.why{font-size:12px;color:var(--tx1);margin-top:8px;line-height:1.6;background:var(--soft);
+  border-radius:var(--r-sm);padding:8px 12px}
+.why:before{content:"排布理由 · ";font-weight:700;color:var(--brand)}
+.daynote{font-size:12px;color:var(--tx1);margin-top:10px;line-height:1.6;background:var(--brand-soft);
+  border:1px solid var(--brand-line);border-radius:var(--r-sm);padding:10px 12px}
+.daynote:before{content:"本日思路 · ";font-weight:700;color:var(--brand)}
+/* 密度开关(行程页标题栏右侧「紧凑 / 详细」)*/
+.hdright{display:flex;align-items:center;gap:8px;flex:none}
+.denselink{font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;
+  padding:5px 10px;border:1px solid var(--accent-line);border-radius:var(--r-full);background:var(--accent-soft);
+  transition:all .15s var(--ease)}
+.denselink:active{transform:scale(.95)}
+/* 紧凑模式:只收起「为什么这么排」这类解释性文字,时间/名称/时长/标签全部保留。
+   #planSummary 被 JS 写了内联 display:block,这里必须 !important 才压得住 */
+.dense .why,.dense .hl,.dense .psum,.dense .tip,.dense .pnote{display:none!important}
+.dense .card{padding:9px 11px}
+.dense .meta{margin-top:5px}
+.dense .node{padding-bottom:9px}
+.dense .move{padding:1px 0 9px 32px}
+.dense .sum{margin-top:10px}
+/* 摘点提示:虚线框,和「本日思路」区分开 —— 这是兜底信息,不是 AI 的编排理由 */
+.daydrop{font-size:12px;color:var(--tx2);margin-top:8px;line-height:1.6;border:1px dashed var(--line);
+  border-radius:var(--r-sm);padding:8px 12px;background:var(--surface-2,rgba(255,255,255,.6))}
+.daydrop b{color:var(--tx);font-weight:600}
+/* 想去的地方 */
+.wishrow{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line-soft)}
+.wishrow:last-child{border-bottom:none}
+.wishrow .wt{flex:1;min-width:0;cursor:pointer}
+.wishrow .wn{font-family:var(--fd);font-size:15px;color:var(--tx);line-height:1.4;font-weight:700}
+.wishrow .wm{font-size:12px;color:var(--tx3);margin-top:3px;line-height:1.5}
+.wishrow.done .wn{color:var(--tx3);text-decoration:line-through;font-weight:400}
+.wishrow .wa{display:flex;gap:6px;flex:none}
+.wishrow .wb{width:36px;height:36px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx2);
+  transition:all .15s var(--ease)}
+.wishrow .wb:hover{border-color:var(--accent-line);color:var(--accent);background:var(--accent-soft)}
+.wishrow .wb:active{transform:scale(.92)}
+.wishrow .wb svg{width:16px;height:16px}
+.star{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:var(--r-md);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:rgba(255,255,255,.92);color:var(--tx3);transition:all .15s var(--ease)}
+.star svg{width:16px;height:16px}
+.star.on{color:var(--gold)}
+.star.on svg{fill:currentColor}
+.star:hover{color:var(--gold);transform:scale(1.08)}
+.cityc{position:relative}
+.card{position:relative}
+.wishbtn{position:absolute;top:10px;right:10px;font-size:11px;padding:5px 10px;border-radius:var(--r-full);
+  border:1px solid var(--line);background:var(--card);color:var(--tx2);cursor:pointer;font-weight:600;
+  transition:all .15s var(--ease)}
+.wishbtn.on{border-color:var(--gold);background:var(--gold-soft);color:#7E5410}
+/* 手动添加想去的地方 */
+.wishadd{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.wa-type{display:flex;gap:8px;flex:none}
+.wa-type .chip{font-size:12px;padding:6px 14px}
+.wa-input{flex:1;min-width:160px;display:flex;flex-direction:column;gap:8px}
+.wa-input input{height:40px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 14px;
+  font-size:14px;font-family:inherit;color:var(--tx);background:var(--card);outline:none;
+  transition:border-color .18s var(--ease);width:100%}
+.wa-input input:focus{border-color:var(--brand);border-width:1.5px}
+.wa-input input::placeholder{color:var(--tx3)}
+.wa-city{flex:1}
+/* 输入景点名时的候选下拉:手打的名字常常和地图上的正式叫法差一两个字 */
+.wa-put{position:relative}
+.wasug{position:absolute;left:0;right:0;top:44px;z-index:60;display:none;overflow:hidden;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:var(--sh3);padding:5px;max-height:264px;overflow-y:auto}
+.wasug.on{display:block}
+.wasug .sg{padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;
+  transition:background .12s var(--ease)}
+.wasug .sg:hover,.wasug .sg.sel{background:var(--soft)}
+.wasug .sn{font-size:13.5px;color:var(--tx);font-weight:600;line-height:1.4}
+.wasug .sn em{font-style:normal;color:var(--accent)}
+.wasug .sa{font-size:11.5px;color:var(--tx3);margin-top:2px;line-height:1.45}
+.wasug .shint{padding:9px 10px;font-size:11.5px;color:var(--tx3);line-height:1.5}
+/* 选中某条之后:把锁定的地址和名字摆出来,让用户确认"就是这一个" */
+.wafix{display:none;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--tx2);
+  background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--r-sm);
+  padding:7px 10px;line-height:1.5}
+.wafix.on{display:flex}
+.wafix b{color:var(--tx);font-weight:600;flex:none;max-width:44%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.wafix span{flex:1;min-width:0;color:var(--tx2)}
+.wafix i{font-style:normal;color:var(--tx3);cursor:pointer;flex:none;font-weight:700;padding:0 2px}
+.wishrow .waddr{font-size:11.5px;color:var(--tx3);margin-top:3px;line-height:1.45;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pnote{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:8px 2px 2px;padding:10px 12px;
+  background:var(--soft);border-radius:var(--r-md)}
+.pnote h3{font-family:var(--fd);font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center}
 .pnote ul{margin:0;padding-left:16px}
 .pnote li{margin:3px 0}
-.pnote .ai.hot{background:#fff1e8;color:#c8501a;border-color:#ffc9a8}
-/* 总体思路是内容,不是标题栏的一部分 —— 放在吸顶块下面,随页面一起滚走。 */
-.psum{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:12px 20px 0;padding:9px 11px;background:var(--brand-soft);border-radius:10px;border-left:3px solid var(--brand)}
-.psum:before{content:"AI 总体思路 · ";font-weight:600;color:var(--brand)}
-.ops{display:flex;gap:8px;margin-top:11px}
-.op{flex:1;text-align:center;font-size:12px;padding:7px 0;border-radius:9px;background:var(--soft);border:1px solid var(--line);color:var(--tx2);cursor:pointer}
-.op:active{background:#E9EBE8}
-.op.del{color:#A32D2D}
+.pnote .ai{font-size:10px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:var(--r-full);font-family:var(--fb);font-weight:600}
+.pnote .ai.hot{background:var(--accent);color:#fff}
+.pnote.wishbox{background:#FFFDF5;border:1px solid #F0DFB8}
+.pnote.wishbox .ai.ws{background:#FFF8E7;color:#9A7B1E}
+.wishbox .whit{color:#7E5410}
+.wishbox .whit b{color:#9A7B1E}
+.wishbox .wmiss{color:var(--tx2)}
+.wishbox .wstale{color:var(--tx2)}
+.wgo{display:inline-block;margin-left:6px;color:var(--accent);font-weight:600;
+  border-bottom:1px solid var(--accent);cursor:pointer;padding-bottom:1px}
+.psum{font-size:12.5px;color:var(--tx1);line-height:1.6;margin:12px 20px 0;padding:10px 12px;
+  background:var(--brand-soft);border-radius:var(--r-md)}
+.psum:before{content:"AI 总体思路 · ";font-weight:700;color:var(--brand)}
+.ops{display:flex;gap:8px;margin-top:12px}
+.op{flex:1;text-align:center;font-size:12px;padding:9px 0;border-radius:var(--r-md);background:var(--card);
+  border:1px solid var(--line);color:var(--tx2);cursor:pointer;transition:all .15s var(--ease);font-weight:500}
+.op:active{background:var(--soft);transform:scale(.97)}
+.op.del{color:#C0392B}
 .mealrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx2);padding:2px 0}
-.mealrow .bar{width:3px;height:16px;border-radius:2px;background:#E3C65C}
+.mealrow .bar{width:3px;height:16px;border-radius:2px;background:var(--gold)}
 
-.move{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--tx3);padding:2px 0 20px 34px}
+.move{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--tx3);padding:1px 0 14px 34px}
 .move .ln{flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--line) 0 4px,transparent 4px 8px)}
 
-.tip{border:1px solid var(--brand-line);background:var(--brand-soft);border-radius:14px;padding:13px 14px;margin:16px 20px 0}
-.tip h3{font-size:13px;font-weight:500;color:var(--brand);display:flex;align-items:center;gap:6px;margin-bottom:8px}
-.tip h3 .ai{font-size:10px;background:var(--brand);color:#fff;padding:2px 6px;border-radius:5px}
-.tip li{list-style:none;font-size:13px;line-height:1.6;color:#1F4636;padding-left:14px;position:relative;margin-bottom:6px}
+.tip{border:1px solid var(--brand-line);background:var(--brand-soft);
+  border-radius:var(--r-md);padding:14px 16px;margin:16px 20px 0}
+.tip h3{font-family:var(--fd);font-size:14px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.tip h3 .ai{font-size:10px;background:var(--brand);color:#fff;padding:2px 8px;border-radius:var(--r-full);font-family:var(--fb);font-weight:600}
+.tip li{list-style:none;font-size:13px;line-height:1.6;color:#1B4332;padding-left:14px;position:relative;margin-bottom:6px}
 .tip li:last-child{margin-bottom:0}
 .tip li:before{content:"";position:absolute;left:2px;top:9px;width:4px;height:4px;border-radius:50%;background:var(--brand)}
 
-.sum{display:flex;gap:10px;margin:14px 20px 0}
-.sumc{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--soft)}
-.sumc .k{font-size:11px;color:var(--tx3)}
-.sumc .v{font-size:16px;font-weight:500;margin-top:2px}
+/* 概览数字 */
+.sum{display:flex;flex-wrap:wrap;gap:10px;margin:14px 20px 0}
+.sum>.daynote,.sum>.daydrop{flex:1 0 100%;margin-top:2px}
+.sumc{flex:1;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;background:var(--card);
+  box-shadow:var(--sh1)}
+.sumc .k{font-size:11px;color:var(--tx3);letter-spacing:.3px;font-weight:600;text-transform:uppercase}
+.sumc .v{font-family:var(--fd);font-size:18px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 .foot{display:flex;gap:10px;padding:16px 20px 0}
 .foot .btn{margin-top:0}
 
+/* 全城页常驻行动栏 */
+.citybar{display:none;flex:none;align-items:center;gap:12px;padding:10px 16px;
+  border-top:1px solid var(--line);background:var(--card);
+  box-shadow:0 -4px 12px rgba(0,0,0,.05)}
+.citybar.on{display:flex}
+.citybar .cb-t{flex:1;min-width:0;line-height:1.35}
+.citybar .cb-t b{display:block;font-family:var(--fd);font-size:15px;font-weight:700}
+.citybar .cb-t span{display:block;font-size:12px;color:var(--tx3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.citybar .cb-b{flex:none;min-height:44px;padding:0 22px;border:none;border-radius:var(--r-md);
+  background:var(--accent);color:#fff;font-size:14px;font-weight:600;letter-spacing:-.2px;
+  font-family:inherit;cursor:pointer;box-shadow:0 4px 12px rgba(231,111,81,.28);
+  transition:all .15s var(--ease)}
+.citybar .cb-b:active{transform:translateY(1px);filter:brightness(.95)}
+
 /* ---------- 城市选择页 ---------- */
-.search{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--soft);border:1px solid var(--line);border-radius:13px}
-.search svg{width:16px;height:16px;flex:none;stroke:var(--tx3);stroke-width:2}
+.search{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh1)}
+.search svg{width:18px;height:18px;flex:none;stroke:var(--tx3);stroke-width:2}
 .search input{flex:1;border:none;background:none;outline:none;font-size:14px;font-family:inherit;color:var(--tx)}
 .search input::placeholder{color:var(--tx3)}
-.grptabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 4px;margin-bottom:12px}
+.grptabs{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;margin-bottom:14px}
 .grptabs::-webkit-scrollbar{width:0}
-.grptab{padding:6px 13px;border-radius:16px;font-size:12.5px;color:var(--tx2);background:var(--soft);border:1px solid var(--line);white-space:nowrap;cursor:pointer;flex:none}
-.grptab.on{background:var(--tx);border-color:var(--tx);color:#fff;font-weight:500}
-.citygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.cityc{border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center;background:var(--card);cursor:pointer;transition:.15s}
-.cityc:active{background:var(--soft)}
-.cityc.on{background:var(--brand-soft);border-color:var(--brand-line)}
-.cityc .cn{font-size:13.5px;font-weight:500;line-height:1.2}
-.cityc .cp{font-size:10.5px;color:var(--tx3);margin-top:3px}
+.grptab{padding:7px 14px;border-radius:var(--r-full);font-size:13px;color:var(--tx2);background:var(--card);
+  border:1px solid var(--line);white-space:nowrap;cursor:pointer;flex:none;
+  transition:all .15s var(--ease);font-weight:500}
+.grptab.on{background:var(--tx);border-color:var(--tx);color:#fff;font-weight:600}
+.citygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cityc{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 6px 11px;text-align:center;
+  background:var(--card);cursor:pointer;transition:all .18s var(--ease);box-shadow:var(--sh1)}
+.cityc:active{transform:scale(.96);background:var(--soft)}
+.cityc.on{background:var(--brand-soft);border-color:var(--brand);box-shadow:var(--sh1),0 0 0 2px var(--brand-line)}
+.cityc .cn{font-family:var(--fd);font-size:14px;font-weight:700;line-height:1.2;letter-spacing:-.2px}
+.cityc .cp{font-size:10.5px;color:var(--tx3);margin-top:4px}
 .cityc.on .cn{color:var(--brand)}
-.cityc .dot{position:absolute;margin:-2px 0 0 3px;width:5px;height:5px;border-radius:50%;background:var(--brand);display:inline-block}
+.cityc .dot{position:absolute;margin:-2px 0 0 3px;width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
 .nonebox{font-size:12px;color:var(--tx3);text-align:center;padding:22px 6px;line-height:1.7}
-.nonebox b{color:var(--tx2);font-weight:500}
+.nonebox b{color:var(--tx2);font-weight:600}
 
 /* ---------- 城市全图页 ---------- */
-.citymapwrap{position:relative;padding:2px 16px 0}
-#cityMapBox{position:relative;width:100%;height:394px;border-radius:18px;overflow:hidden;
-  border:1px solid var(--line);background:#8FA2AD;box-shadow:0 6px 18px rgba(16,24,20,.07)}
-#cityMapBox.tmap-on{background:#7A8E99}
-.mapfloat{position:absolute;left:26px;top:26px;z-index:3;background:rgba(255,255,255,.92);
-  border:1px solid var(--line);border-radius:20px;padding:6px 13px;font-size:12px;color:var(--tx);
-  box-shadow:0 2px 8px rgba(16,24,20,.08);font-weight:500}
-.mapfloat i{font-style:normal;color:var(--brand)}
+/* 上下左右各留 8px 给图版外圈(padding 不能被外圈吃掉) */
+.citymapwrap{position:relative;padding:8px 18px 0}
+/* 地图做成「图版」:外圈纸色留白 + 细线,像贴进手册的插图 */
+#cityMapBox{position:relative;width:100%;height:394px;border-radius:3px;overflow:hidden;
+  border:1px solid var(--line);background:#93A19C;
+  box-shadow:0 0 0 4px var(--paper),0 0 0 5px var(--line),0 12px 28px rgba(0,0,0,.12)}
+#cityMapBox.tmap-on{background:#7E8C87}
+.mapfloat{position:absolute;left:26px;top:26px;z-index:3;background:rgba(251,250,246,.94);
+  border:1px solid var(--line);border-radius:3px;padding:6px 12px;font-size:12px;color:var(--tx);
+  box-shadow:var(--sh2);font-weight:600;font-variant-numeric:tabular-nums}
+.mapfloat i{font-style:normal;color:var(--accent);font-weight:600}
 .mapctl.float{position:absolute;right:26px;bottom:26px;z-index:3;margin:0;gap:6px;
-  background:rgba(255,255,255,.92);padding:5px;border-radius:15px;box-shadow:0 2px 8px rgba(16,24,20,.08)}
+  background:rgba(251,250,246,.94);padding:5px;border-radius:9px;box-shadow:var(--sh2)}
 .mapctl.float .chip{font-size:12px;padding:6px 11px}
 .mapload{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;
-  background:#E8EBE8;font-size:12.5px;color:var(--tx3)}
+  background:var(--paper-2);font-size:12.5px;color:var(--tx3)}
 .mapload .sp{width:22px;height:22px;border:2.5px solid var(--brand-line);border-top-color:var(--brand);
   border-radius:50%;margin-right:10px;animation:spin .8s linear infinite}
-.mapdiag{margin:10px 16px 0;padding:10px 12px;background:#F6F7F5;border:1px dashed var(--line);
-  border-radius:10px;font-size:11px;color:var(--tx3);line-height:1.7;max-height:150px;overflow:auto}
-.mapdiag pre{margin:6px 0 0;font-size:10px;white-space:pre-wrap;word-break:break-all;color:#8A8F89}
+.mapdiag{margin:10px 16px 0;padding:10px 12px;background:var(--paper-2);border:1px dashed var(--line);
+  border-radius:3px;font-size:11px;color:var(--tx3);line-height:1.7;max-height:150px;overflow:auto}
+.mapdiag pre{margin:6px 0 0;font-size:10px;white-space:pre-wrap;word-break:break-all;color:var(--tx3)}
 .empty{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0 26px;text-align:center;background:var(--soft)}
-.empty .t{font-size:14px;font-weight:500;margin-bottom:6px}
+.empty .t{font-family:var(--fd);font-size:15px;font-weight:600;margin-bottom:6px}
 .empty .d{font-size:12px;color:var(--tx3);line-height:1.7;margin-bottom:14px}
 .empty .chips{justify-content:center}
 
-.mapwrap{padding:4px 20px 0}
-.mapsvg{width:100%;border-radius:14px;background:#F2F4F1;border:1px solid var(--line);display:block}
+.mapwrap{padding:8px 20px 0}
+.mapsvg{width:100%;border-radius:3px;background:var(--paper-2);border:1px solid var(--line);display:block}
 .mlegend{display:flex;gap:14px;font-size:11px;color:var(--tx3);margin-top:10px;justify-content:center}
-/* 真实地图容器:GL JS 要求固定高度,否则渲染不出东西 */
-#mapBox{width:100%;height:330px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#F2F4F1}
-#mapBox.tmap-on{background:#E8EBE8}
-.maphint{margin-top:10px;font-size:11.5px;line-height:1.6;color:var(--tx3);text-align:center;padding:0 6px}
-.maphint code{background:var(--soft);padding:1px 5px;border-radius:4px;font-size:11px}
+/* 真实地图容器:GL JS 要求固定高度,否则渲染不出东西(高度不能动) */
+#mapBox{width:100%;height:330px;border-radius:3px;overflow:hidden;border:1px solid var(--line);
+  background:var(--paper-2);box-shadow:0 0 0 4px var(--paper),0 0 0 5px var(--line)}
+#mapBox.tmap-on{background:var(--paper-2)}
+.maphint{margin-top:14px;font-size:11.5px;line-height:1.6;color:var(--tx3);text-align:center;padding:0 6px}
+.maphint code{background:var(--soft);padding:1px 5px;border-radius:3px;font-size:11px}
 .mapctl{display:flex;gap:8px;justify-content:center;margin-top:10px}
 .mapctl .chip{margin:0}
 
-.tabbar{height:58px;border-top:1px solid var(--line);display:flex;flex:none;background:var(--card)}
+/* ---------- 底部导航 ---------- */
+.tabbar{height:58px;border-top:1px solid var(--line);display:flex;flex:none;background:var(--card);position:relative}
 .tabbar.hide{display:none}
-.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:var(--tx3);cursor:pointer}
-.tb.on{color:var(--brand)}
-.tb svg{width:20px;height:20px}
+/* 5 个 tab:导航要闭环 —— 首页(选城市)如果在导航里没有位置,进去了就出不来 */
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:10.5px;color:var(--tx3);cursor:pointer;position:relative;letter-spacing:-.2px}
+.tb.on{color:var(--brand);font-weight:600}
+.tb.on:before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:22px;height:2px;background:var(--accent)}
+.tb svg{width:19px;height:19px}
+/* 想去 tab 的角标:有收藏时显示数字,首页不再放心愿内容,计数靠这里 */
+.tb[data-n]:not([data-n=""]):after{content:attr(data-n);position:absolute;top:4px;right:50%;
+  transform:translateX(13px);background:var(--accent);color:#fff;font-size:9.5px;font-weight:600;
+  min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 4px;text-align:center}
 
-.mask{position:absolute;inset:0;background:rgba(20,22,20,.42);display:none;align-items:flex-end;z-index:20}
+.mask{position:absolute;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;z-index:20}
 .mask.on{display:flex}
-.sheet{width:100%;background:var(--card);border-radius:20px 20px 0 0;padding:18px 20px 22px;max-height:74%;overflow-y:auto;animation:up .22s ease}
+.sheet{width:100%;background:var(--card);border-radius:20px 20px 0 0;padding:18px 20px 22px;
+  max-height:74%;overflow-y:auto;animation:up .22s ease;box-shadow:0 -8px 30px rgba(0,0,0,.12)}
 @keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
-.sheet h2{font-size:16px;font-weight:500;margin-bottom:4px}
+.sheet h2{font-family:var(--fd);font-size:17px;font-weight:600;margin-bottom:4px}
 .sheet .d{font-size:12px;color:var(--tx3);margin-bottom:14px}
-.li{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.li{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line-soft);cursor:pointer}
 .li:last-child{border:none}
-.li .n{flex:1;font-size:14px}
+.li .n{font-family:var(--fd);flex:1;font-size:14.5px;font-weight:600}
 .li .m{font-size:11px;color:var(--tx3);margin-top:2px}
-.li .a{font-size:12px;color:var(--brand);flex:none}
-.li .r{font-size:12px;color:var(--warn);flex:none}
+.li .a{font-size:12px;color:var(--accent);flex:none;font-weight:600}
+.li .r{font-size:12px;color:var(--warn);flex:none;font-weight:600}
 
 /* 落脚点:卡片复用 .loc 的外观;搜索结果复用抽屉的 .li */
-.stayrow{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--soft);border:1px solid var(--line);border-radius:13px;margin-top:12px}
+.stayrow{display:flex;align-items:center;gap:9px;padding:12px 14px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r-md);margin-top:12px}
 .stayrow input{flex:1;border:none;background:transparent;font-size:14px;font-family:inherit;color:var(--tx);outline:none}
-.stayrow button{border:none;background:var(--brand);color:#fff;font-size:13px;padding:7px 14px;border-radius:9px;cursor:pointer;font-family:inherit}
+.stayrow button{border:none;background:var(--brand);color:#fff;font-size:13px;padding:7px 14px;
+  border-radius:var(--r-sm);cursor:pointer;font-family:inherit;font-weight:600}
 .stayquick{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
-.stayquick .q{font-size:12px;padding:7px 12px;border-radius:16px;background:var(--soft);border:1px solid var(--line);color:var(--tx2);cursor:pointer}
-/* 行程页上的落脚点状态条:显示这座行程是围绕哪个落脚点排的,并且能改 */
-.staybar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx2);margin:12px 20px 0;padding:8px 11px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
-.staybar b{font-weight:500;color:var(--tx1)}
-.staybar .k{margin-left:auto;color:var(--brand);cursor:pointer;flex:none}
+.stayquick .q{font-size:12px;padding:7px 12px;border-radius:var(--r-full);background:var(--card);
+  border:1px solid var(--line);color:var(--tx2);cursor:pointer;transition:all .15s var(--ease)}
+/* 行程页上的落脚点状态条 */
+.staybar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx2);margin:12px 20px 0;
+  padding:9px 13px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-md)}
+.staybar b{font-weight:600;color:var(--tx)}
+.staybar .k{margin-left:auto;color:var(--accent);cursor:pointer;flex:none;font-weight:600}
 /* 时间轴上的通勤文案:去程 / 回程要一眼看出是落脚点相关的那段 */
-.move .mvt{color:var(--tx2);font-weight:500}
-.move.home .mvt{color:var(--brand)}
+.move .mvt{color:var(--tx2);font-weight:600}
+.move.home .mvt{color:var(--accent)}
 
 .load{width:100%;padding:30px 20px;text-align:center}
-.load .sp{width:34px;height:34px;border:2.5px solid var(--brand-line);border-top-color:var(--brand);border-radius:50%;margin:0 auto 18px;animation:spin .8s linear infinite}
+.load .sp{width:34px;height:34px;border:2.5px solid var(--brand-line);border-top-color:var(--brand);
+  border-radius:50%;margin:0 auto 18px;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.load .st{font-size:14px;font-weight:500}
+.load .st{font-family:var(--fd);font-size:16px;font-weight:700}
 .load ol{text-align:left;margin:18px auto 0;max-width:260px}
 .load li{list-style:none;font-size:12px;color:var(--tx3);padding:7px 0;display:flex;gap:9px;align-items:center;transition:color .2s}
-.load li .k{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--tx3)}
+.load li .k{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line);flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--tx3)}
 .load li.done{color:var(--tx2)}
 .load li.done .k{background:var(--brand);border-color:var(--brand);color:#fff}
 /* 生成进度:进度条 + 当前动作 + 计时 */
-.ldbar{height:5px;border-radius:99px;background:var(--line);margin:16px 4px 0;overflow:hidden}
-.ldbar i{display:block;height:100%;width:0;border-radius:99px;background:var(--brand);transition:width .35s ease}
+.ldbar{height:5px;border-radius:99px;background:var(--paper-2);margin:16px 4px 0;overflow:hidden}
+.ldbar i{display:block;height:100%;width:0;border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .35s ease}
 .ldrow{display:flex;justify-content:space-between;gap:10px;margin:8px 4px 0;font-size:12px;color:var(--tx3);min-height:17px}
 .ldrow #ldDesc{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ldrow #ldPct{flex:none;color:var(--brand);font-weight:500;font-variant-numeric:tabular-nums}
+.ldrow #ldPct{flex:none;color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
 .ldtip{font-size:11px;color:var(--tx3);line-height:1.55;margin:14px 4px 0;text-align:left}
 .ldfoot{display:flex;align-items:center;justify-content:space-between;margin:14px 4px 0;font-size:11px;color:var(--tx3)}
-.ldcancel{border:1px solid var(--line);background:transparent;color:var(--tx3);font-size:11.5px;padding:5px 14px;border-radius:99px;cursor:pointer;font-family:inherit}
-.ldcancel:hover{border-color:var(--brand-line);color:var(--tx2)}
+.ldcancel{border:1px solid var(--line);background:transparent;color:var(--tx3);font-size:11.5px;
+  padding:6px 14px;border-radius:99px;cursor:pointer;font-family:inherit}
+.ldcancel:hover{border-color:var(--accent-line);color:var(--tx2)}
 
 /* ---------- 对话式调整计划 ---------- */
-.chatmask{position:absolute;inset:0;background:rgba(20,22,20,.42);display:none;flex-direction:column;justify-content:flex-end;z-index:30}
+.chatmask{position:absolute;inset:0;background:rgba(0,0,0,.4);display:none;flex-direction:column;justify-content:flex-end;z-index:30}
 .chatmask.on{display:flex}
-.chatwin{width:100%;background:var(--card);border-radius:20px 20px 0 0;display:flex;flex-direction:column;max-height:82%;animation:up .22s ease}
-.chathd{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line);flex:none}
-.chathd h2{font-size:16px;font-weight:500;flex:1}
-.chathd .x{width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--tx2);font-size:15px;line-height:28px;text-align:center;cursor:pointer;flex:none}
+.chatwin{width:100%;background:var(--card);border-radius:20px 20px 0 0;display:flex;flex-direction:column;
+  max-height:82%;animation:up .22s ease;box-shadow:0 -8px 30px rgba(0,0,0,.14)}
+.chathd{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line-soft);flex:none}
+.chathd h2{font-family:var(--fd);font-size:17px;font-weight:600;flex:1}
+.chathd .x{width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--tx2);
+  font-size:15px;line-height:28px;text-align:center;cursor:pointer;flex:none}
 .chathd .sub{font-size:11.5px;color:var(--tx3);margin-top:2px}
 .chatlog{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
-.msg{max-width:86%;font-size:13.5px;line-height:1.6;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
-.msg.me{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:5px}
-.msg.ai{align-self:flex-start;background:var(--soft);color:var(--tx);border-bottom-left-radius:5px}
+.msg{max-width:86%;font-size:13.5px;line-height:1.6;padding:10px 13px;border-radius:12px;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--soft);color:var(--tx);border-bottom-left-radius:4px}
 .msg.sys{align-self:center;background:transparent;color:var(--tx3);font-size:11.5px;padding:2px 0}
 .msg .diff{display:block;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:var(--tx2)}
 .chatquick{display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 12px;flex:none}
-.chatquick .q{font-size:12px;padding:6px 11px;border-radius:14px;background:var(--soft);color:var(--tx2);cursor:pointer;border:1px solid var(--line)}
-.chatquick .q:active{background:var(--brand-line)}
-.chatin{flex:none;display:flex;gap:9px;padding:12px 18px 18px;border-top:1px solid var(--line);align-items:flex-end}
-.chatin textarea{flex:1;border:1px solid var(--line);border-radius:18px;padding:10px 13px;font-size:13.5px;font-family:inherit;resize:none;background:var(--card);color:var(--tx);line-height:1.5;max-height:96px;min-height:38px}
-.chatin textarea:focus{outline:none;border-color:var(--brand-line)}
-.chatin .send{padding:0 16px;height:38px;border:none;border-radius:19px;background:var(--brand);color:#fff;font-size:13px;cursor:pointer;flex:none}
+.chatquick .q{font-size:12px;padding:6px 11px;border-radius:7px;background:var(--soft);color:var(--tx2);
+  cursor:pointer;border:1px solid var(--line)}
+.chatquick .q:active{background:var(--accent-line)}
+.chatin{flex:none;display:flex;gap:9px;padding:12px 18px 18px;border-top:1px solid var(--line-soft);align-items:flex-end}
+.chatin textarea{flex:1;border:1px solid var(--line);border-radius:14px;padding:10px 13px;font-size:13.5px;
+  font-family:inherit;resize:none;background:var(--card);color:var(--tx);line-height:1.5;max-height:96px;min-height:38px}
+.chatin textarea:focus{outline:none;border-color:var(--brand)}
+.chatin .send{padding:0 16px;height:38px;border:none;border-radius:7px;background:var(--accent);color:#fff;
+  font-size:13px;cursor:pointer;flex:none;font-weight:600}
 .chatin .send:disabled{opacity:.45;cursor:default}
-.load li.cur .k{border-color:var(--brand)}
+.load li.cur .k{border-color:var(--accent)}
 
-.note{width:290px;flex:none;font-size:13px;line-height:1.75;color:var(--tx2);padding-top:8px}
-.note h2{font-size:14px;font-weight:500;color:var(--tx);margin-bottom:10px}
+/* ---------- 右侧说明(桌面是深墨色,所以这块要反白) ---------- */
+.note{width:290px;flex:none;font-size:13px;line-height:1.8;color:#A9A292;padding-top:8px}
+.note h2{font-family:var(--fd);font-size:16px;font-weight:600;color:#E9E3D3;margin-bottom:12px;letter-spacing:.3px}
 .note p{margin-bottom:10px}
-.note code{background:#fff;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
-.note .k{color:var(--brand)}
+.note code{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:3px;
+  padding:1px 5px;font-size:12px;color:#D6CEBC}
+.note .k{color:#E2905E}
+
+/* ============================================================
+   入场编排:一次排好的序列(不是逐个 hover 特效)
+   页面切到 .on 时 display none→block,动画自动重播
+   ============================================================ */
+@media (prefers-reduced-motion: no-preference){
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  /* 吸顶的只淡入,不做位移,避免和 sticky 打架 */
+  .page.on>.appbar,.page.on>.triphead{animation:fade .34s var(--ease) both}
+  /* 内容块:60~120ms 一档阶梯 */
+  .page.on>.pad>*{animation:rise var(--dur) var(--ease) both}
+  .page.on>.pad>*:nth-child(1){animation-delay:.05s}
+  .page.on>.pad>*:nth-child(2){animation-delay:.12s}
+  .page.on>.pad>*:nth-child(3){animation-delay:.19s}
+  .page.on>.pad>*:nth-child(4){animation-delay:.26s}
+  .page.on>.pad>*:nth-child(5){animation-delay:.33s}
+  .page.on>.pad>*:nth-child(n+6){animation-delay:.40s}
+  /* 行程页:概览 → AI 提示 → 时间轴逐条铺开 → 底部操作 */
+  .page.on>.sum{animation:rise var(--dur) var(--ease) .08s both}
+  .page.on>.tip{animation:rise var(--dur) var(--ease) .16s both}
+  .page.on>.foot{animation:rise var(--dur) var(--ease) .44s both}
+  .page.on .tl>*{animation:rise .45s var(--ease) both}
+  .page.on .tl>*:nth-child(1){animation-delay:.10s}
+  .page.on .tl>*:nth-child(2){animation-delay:.16s}
+  .page.on .tl>*:nth-child(3){animation-delay:.22s}
+  .page.on .tl>*:nth-child(4){animation-delay:.28s}
+  .page.on .tl>*:nth-child(5){animation-delay:.34s}
+  .page.on .tl>*:nth-child(6){animation-delay:.40s}
+  .page.on .tl>*:nth-child(n+7){animation-delay:.46s}
+  /* 地图容器只淡入:GL 画布在 transform 容器里容易出渲染问题 */
+  .page.on>.citymapwrap,.page.on>.mapwrap{animation:fade .5s var(--ease) both}
+}
+/* 降低动效:直接切断所有装饰动画;加载转圈保留(它是状态指示,不是装饰) */
+@media (prefers-reduced-motion: reduce){
+  .page.on *{animation-name:fade !important;animation-duration:.01ms !important;animation-delay:0s !important}
+  .sheet,.chatwin{animation-name:fade !important;animation-duration:.01ms !important}
+}
+
 @media(max-width:900px){.note{display:none}}
 @media(max-width:460px){
   body{padding:0}
@@ -273,8 +603,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
   <div class="body">
 
     <section id="p-home" class="page on">
-      <div class="appbar"><div><h1>想去哪儿</h1><div class="sub">先选城市,看全城景点再决定怎么玩</div></div></div>
+      <div class="appbar"><div><h1>从这儿出发</h1><div class="sub">接着上次的走,或者重新挑个地方</div></div></div>
       <div class="pad">
+        <!-- 上次的行程:恢复提示原来挂在全城页,可恢复动作发生在首页,
+             等于给了个没人看得见的提示。挪回首页,做成能直接点进去的卡片。 -->
+        <div class="sec" id="homeResumeSec" style="display:none">
+          <div class="lb">接着上次的走</div>
+          <div class="resume" id="homeResume"></div>
+        </div>
+        <!-- 心愿清单相关的入口都收掉了:底部导航已有独立的「想去」tab,
+             首页再铺一遍攒着的城市、最近去过、清单入口,等于做了三遍同一件事,
+             反而把"出发"这个主动作埋掉了。 -->
         <div class="sec">
           <div class="lb">搜索城市(到市级)</div>
           <div class="search">
@@ -309,7 +648,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       <div class="pad">
         <div class="sec">
           <div class="lb" id="typeLb">只看这类景点</div>
-          <div class="chips" id="typeFilter"></div>
+          <div class="chips scroll" id="typeFilter"></div>
         </div>
         <div class="sec">
           <div class="lb">玩几天</div>
@@ -317,7 +656,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
         </div>
         <div class="sec">
           <div class="lb">偏好(可不选)</div>
-          <div class="chips" id="cPrefSel"></div>
+          <div class="chips scroll" id="cPrefSel"></div>
         </div>
         <div class="sec">
           <div class="lb">节奏</div>
@@ -334,8 +673,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
             <div class="chg" id="stayAct">设置</div>
           </div>
         </div>
-        <button class="btn" onclick="startPlan()">按这些偏好生成行程</button>
-        <div class="lb" id="restoreHint" style="display:none;margin-top:16px"></div>
+        <!-- 主按钮不放在页面里:筛选有 5 块,滚两屏才够得着,所以挪到底部常驻栏(#cityBar) -->
+        <!-- 恢复提示原来挂在这儿,可恢复发生在首页 —— 挪回首页做成卡片了(见 #homeResume) -->
         <div class="lb" id="cityListLb" style="margin-top:22px"></div>
         <div class="tl" id="cityList" style="padding:8px 0 0"></div>
       </div>
@@ -347,11 +686,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       <div class="triphead" id="tripHead">
         <div class="appbar">
           <div><h1 id="tripTitle">成都 · 3 天</h1><div class="sub" id="tripSub"></div></div>
-          <span class="badge" id="srcBadge">示例数据</span>
+          <!-- 密度开关:默认「详细」(每个点的理由全部摊开)。
+               觉得一屏只放得下一个点时切「紧凑」,把排布理由/亮点收起来。
+               这是用户自己选的,不是替他删信息。 -->
+          <div class="hdright">
+            <span class="denselink" id="denseBtn" onclick="toggleDense()">紧凑</span>
+            <span class="badge" id="srcBadge">示例数据</span>
+          </div>
         </div>
         <div class="tabs" id="dayTabs"></div>
       </div>
       <div class="sum" id="daySum"></div>
+      <!-- 就地调参:想改天数/节奏/偏好不用退到全城页重来一遍。
+           改完自动重排(短延迟合并连点,免得点三下打三次后端)。 -->
+      <div class="tune" id="tuneBar">
+        <div class="tn-head" onclick="toggleTune()">
+          <div class="tn-t"><b id="tuneSum">3 天 · 适中</b><span id="tuneHint">想改天数、节奏或偏好,在这儿调</span></div>
+          <div class="tn-caret" id="tuneCaret">调整</div>
+        </div>
+        <div class="tn-body" id="tuneBody" style="display:none">
+          <div class="tn-row"><div class="tn-k">天数</div><div class="days" id="tDaySel"></div></div>
+          <div class="tn-row"><div class="tn-k">节奏</div><div class="chips" id="tPaceSel"></div></div>
+          <div class="tn-row"><div class="tn-k">偏好</div><div class="chips scroll" id="tPrefSel"></div></div>
+          <div class="tn-ft" id="tuneFoot"></div>
+        </div>
+      </div>
       <div class="tip" id="aiTip"></div>
       <div class="tl" id="timeline"></div>
       <div class="foot">
@@ -365,10 +724,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       <div class="appbar"><div><h1 id="mapTitle">第 1 天路线</h1><div class="sub" id="mapSub">三维实景地图 · 按行程顺序连线</div></div></div>
       <div class="mapwrap">
         <div id="mapBox"></div>
-        <div class="mapctl" id="mapModeCtl" style="display:none">
-          <div class="chip on" data-mode="day">当天行程</div>
-          <div class="chip" data-mode="city">全城景点</div>
-        </div>
+        <!-- 原来这里是「当天行程 / 全城景点」二选一。全城景点在下面全城页已经有一整张
+             三维地图了,两个页面做同一件事,还各自维护一份地图实例。地图页就专心画当天的
+             路线,腾出来的位置换成切天数 —— 不用为了看第二天专门退回行程页。 -->
+        <div class="mapctl" id="mapDayCtl" style="display:none"></div>
         <div class="mapctl" id="mapCtl" style="display:none">
           <div class="chip on" data-pitch="0">俯视</div>
           <div class="chip on" data-b="sat">卫星</div>
@@ -380,13 +739,65 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       <div class="tl" id="mapList" style="margin-top:14px"></div>
     </section>
 
+    <section id="p-wish" class="page">
+      <div class="appbar"><div><h1>想去的地方</h1><div class="sub" id="wishSub">先攒着,以后有机会再去</div></div></div>
+      <div class="pad">
+        <!-- 手动添加:不只是从城市卡/景点卡点星标 —— 用户可能心里有个具体地方,
+             但还没在哪座城的列表里看到它,直接打字存下来更快。 -->
+        <div class="sec" style="margin-top:16px">
+          <div class="lb">添加想去的地方</div>
+          <div class="wishadd">
+            <div class="wa-type" id="waType">
+              <div class="chip on" data-k="poi">景点</div>
+              <div class="chip" data-k="city">城市</div>
+            </div>
+            <div class="wa-input">
+              <div class="wa-put">
+                <input id="waName" type="text" autocomplete="off" placeholder="输入景点或地方名,例如 鼓浪屿" onkeydown="waKey(event)" oninput="waType()">
+                <div class="wasug" id="waSug"></div>
+              </div>
+              <input id="waCity" type="text" class="wa-city" placeholder="所在城市(选填),填了搜得更准" onkeydown="waKey(event)" oninput="waType()">
+              <div class="wafix" id="waFix"></div>
+            </div>
+            <button class="btn" style="margin-top:0;flex:none;padding:0 20px" onclick="wishAddManual()">添加</button>
+          </div>
+        </div>
+        <div class="nonebox" id="wishNone" style="display:none"></div>
+        <div class="sec" id="wishTodoWrap" style="display:none">
+          <div class="lb">还没去 · <span id="wishTodoN">0</span> 个</div>
+          <div id="wishTodo"></div>
+        </div>
+        <div class="sec" id="wishDoneWrap" style="display:none">
+          <div class="lb">已经去过了</div>
+          <div id="wishDone"></div>
+        </div>
+        <div class="lb" style="margin-top:18px;line-height:1.8">
+          也可以在首页的城市卡片、全城的景点列表上点星标,直接存到这里。
+          <span id="wishStoreHint"></span>
+        </div>
+      </div>
+    </section>
+
   </div>
 
-  <nav class="tabbar hide" id="tabbar">
+  <!-- 全城页的常驻行动栏:筛选有 5 块,主按钮埋在页面里会滚丢,所以固定不动。
+       只在全城页出现(showPage 里切 .on)。 -->
+  <div class="citybar" id="cityBar">
+    <div class="cb-t"><b id="cbCity">—</b><span id="cbCfg">选好天数就能生成</span></div>
+    <button class="cb-b" onclick="startPlan()">生成行程</button>
+  </div>
+
+  <nav class="tabbar" id="tabbar">
+    <div class="tb on" id="tb-home" onclick="go('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/></svg>
+      选城市</div>
+    <div class="tb" id="tb-wish" onclick="go('wish')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 16.8l-5.6 3.3 1.5-6.3L3 9.5l6.4-.5L12 3l2.6 6 6.4.5-4.9 4.3 1.5 6.3z"/></svg>
+      想去</div>
     <div class="tb" id="tb-city" onclick="go('city')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-6.1 7-11a7 7 0 10-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
       全城</div>
-    <div class="tb on" id="tb-trip" onclick="go('trip')">
+    <div class="tb" id="tb-trip" onclick="go('trip')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4M16 3v4M8 11h8M8 15h5"/></svg>
       行程</div>
     <div class="tb" id="tb-map" onclick="go('map')">
@@ -573,8 +984,9 @@ var NEARKM=20;    // 同天两点最大间隔,超过就不是同一片区域
 var MAXLEG=90;    // 单段通勤上限
 var API='';
 
-var S={city:'成都',days:3,prefs:[],pace:'适中',plan:null,di:0,live:false,mapMode:'day',
+var S={city:'成都',days:3,prefs:[],pace:'适中',plan:null,di:0,live:false,
        pois:[],typeFilter:'',grp:'热门',grpQ:'',poisTs:0,poisFresh:false,
+       wish:[],            // 想去的地方(心愿清单),有后端时由 /api/wish 下发
        stay:null,           // 落脚点 {name,lat,lng,addr} —— S.base 已被底图类型占用,别混用
        // S.base 是底图类型 'sat'/'vec',不是落脚点。名字撞了很难查,两者各自独立。
        base:'sat',planTs:0,planFresh:false};
@@ -807,7 +1219,8 @@ function recalc(){
 }
 
 /* ---------- 渲染 ---------- */
-/* 首页:选城市(到市级) */
+/* 首页:出发地。一进来就能接着上次的走,或者挑个新地方。
+   心愿清单的内容不放这儿 —— 底部导航已有独立的「想去」tab,首页再铺一遍只是重复。 */
 function renderHome(){
   var t=$('grpTabs');t.innerHTML='';
   CITIES.forEach(function(g){
@@ -815,13 +1228,385 @@ function renderHome(){
     e.onclick=function(){S.grp=g[0];renderHome()};t.appendChild(e);
   });
   renderCityGrid();
+  renderHomeResume();
 }
+/* 上次的行程。有就显示、没有就整块收掉 —— 空着一块占位比没有更烦人。 */
+function renderHomeResume(){
+  var sec=$('homeResumeSec'),box=$('homeResume');
+  if(!sec||!box)return;
+  var p=S.plan;
+  if(!p||!p.days||!p.days.length){sec.style.display='none';return}
+  var n=0;p.days.forEach(function(d){n+=(d.items||[]).length});
+  var b=(p.base&&p.base.name)||(S.stay&&S.stay.name)||'';
+  sec.style.display='';
+  box.innerHTML=
+    '<div class="rs-t"><b>'+esc(p.city||cityLabel())+' · '+p.days.length+' 天</b>'+
+      '<span>'+n+' 个点 · '+esc(p.pace||'适中')+'节奏'+(b?' · 住'+esc(b):'')+'</span></div>'+
+    '<div class="rs-a"><span class="rs-go" onclick="go(\'trip\')">继续</span>'+
+      '<span class="rs-no" onclick="dropPlan()">不看了</span></div>';
+}
+function hideResume(){
+  var s=$('homeResumeSec');if(s)s.style.display='none';
+}
+/* ---------- 想去的地方(心愿清单) ----------
+ * 有的地方想去、眼下走不开,先攒着。有后端就存后端(server/.data/wish.json ——
+ * 特意不放 .cache,免得哪天清路线缓存把攒了半年的清单一起清掉);
+ * 直接用 file:// 打开或后端没起时降级 localStorage,功能一样,只是换设备就没了。 */
+var STAR_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 16.8l-5.6 3.3 1.5-6.3L3 9.5l6.4-.5L12 3l2.6 6 6.4.5-4.9 4.3 1.5 6.3z"/></svg>';
+var WISH_KEY='tm_wish';
+
+function wishId(kind,name,city){return kind+'|'+(city||'')+'|'+(name||'')}
+function wishLocal(){
+  try{var a=JSON.parse(localStorage.getItem(WISH_KEY)||'[]');return a instanceof Array?a:[]}
+  catch(e){return []}
+}
+function wishLocalSet(a){try{localStorage.setItem(WISH_KEY,JSON.stringify(a))}catch(e){}}
+
+function wishHas(kind,name,city){
+  var id=wishId(kind,name,city||name),hit=false;
+  (S.wish||[]).forEach(function(x){if(x.id===id)hit=true});
+  return hit;
+}
+function wishApply(items){
+  if(!items)return;
+  S.wish=items;wishLocalSet(items);wishSyncUI();
+}
+/* 清单一变,所有"加入想去"的入口都要跟着变。
+   这些按钮的选中态是建卡片那一刻写进 DOM 的,不在同一处重刷就永远是旧值:
+   在想去页删掉一个城市,回首页那颗星还亮着,看着像没删成功 —— 这是最容易挨骂的一类 bug。
+   所以三处入口统一在这里刷,而不是各改各的。 */
+function wishSyncUI(){
+  wishHint();
+  if($('wishTodo'))renderWish();
+  // 城市网格:星标的 on 类由 wishHas 决定,必须重建卡片才准
+  if($('cityGrid'))renderCityGrid();
+  // 全城景点列表:每张三卡右上角的"想去/已想去"
+  if(S.pois&&S.pois.length&&$('cityList'))renderCityList(shownPois());
+}
+function loadWish(){
+  if(!API){S.wish=wishLocal();wishHint();return}
+  fetch(API+'/api/wish',{cache:'no-store'}).then(function(r){return r.json()})
+    .then(function(d){wishApply(d&&d.items)})
+    .catch(function(){S.wish=wishLocal();wishHint()});
+}
+function wishAdd(it){
+  // 乐观更新:先改内存,再持久化。后端请求失败时回滚。
+  // 以前是等 fetch 回来才改 S.wish,连点两下时第二次判断用的还是旧状态 → 重复添加
+  var id=wishId(it.kind,it.name,it.city||it.name);
+  var item={id:id,kind:it.kind,name:it.name,city:it.city||it.name,
+            lat:it.lat||0,lng:it.lng||0,note:'',addr:it.addr||'',done:false,
+            added:Math.round(Date.now()/1000)};
+  var prev=S.wish||[];
+  var next=prev.filter(function(x){return x.id!==id});
+  next.push(item);
+  wishApply(next);
+  if(API){
+    fetch(API+'/api/wish',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(it)})
+      .then(function(r){return r.json()}).then(function(d){if(d&&d.items)wishApply(d.items)})
+      .catch(function(){
+        wishApply(prev);   // 回滚
+        toast('没存上,后端可能断了');
+      });
+  }
+}
+function wishDel(id){
+  var prev=S.wish||[];
+  var next=prev.filter(function(x){return x.id!==id});
+  wishApply(next);
+  if(API){
+    fetch(API+'/api/wish?id='+encodeURIComponent(id),{method:'DELETE'})
+      .then(function(r){return r.json()}).then(function(d){if(d&&d.items)wishApply(d.items)})
+      .catch(function(){wishApply(prev)});   // 回滚,不 toast——删除失败用户不太在意
+  }
+}
+  function wishMark(id,done){
+  var prev=S.wish||[];
+  var next=prev.map(function(x){
+    if(x.id===id){var c={};for(var k in x)c[k]=x[k];c.done=done;c.done_at=done?Math.round(Date.now()/1000):0;return c}
+    return x;
+  });
+  wishApply(next);
+  if(API){
+    fetch(API+'/api/wish/mark',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({id:id,done:done})})
+      .then(function(r){return r.json()})
+      .then(function(d){if(d&&d.items)wishApply(d.items)})
+      .catch(function(){wishApply(prev)});
+  }
+}
+/* 手动添加:在想去页直接打字输入,不用先去城市列表找星标 */
+var _waKind='poi';
+var _waSeq=0,_waT=null,_waList=[],_waSel=-1,_waPick=null;
+
+function initWishAdd(){
+  var box=$('waType');if(!box)return;
+  box.querySelectorAll('.chip').forEach(function(c){
+    c.onclick=function(){
+      box.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on')});
+      c.classList.add('on');
+      _waKind=c.getAttribute('data-k');
+      waClearPick();waHideSug();
+      var ci=$('waCity');
+      if(ci)ci.style.display=(_waKind==='city')?'none':'';
+      var ni=$('waName');
+      if(ni)ni.placeholder=(_waKind==='city')?'输入城市名,例如 重庆':'输入景点或地方名,例如 鼓浪屿';
+    };
+  });
+  // 下拉是浮层,点到别处要收起来,否则一直挡着下面的清单
+  document.addEventListener('click',function(ev){
+    var p=document.querySelector('.wa-put');
+    if(!p)return;
+    if(!p.contains(ev.target))waHideSug();
+  });
+}
+
+/* -------- 输入时的候选:把"手打的名字"换成"地图上真的那一条" --------
+   手打有两个坑:
+     ① 名字和地图上的正式叫法差一两个字(「鼓浪屿」vs「鼓浪屿景区」),
+        后端按规范化名字精确匹配,差一点就标不出来 —— 排行程时会当成不存在;
+     ② 没有经纬度,算不出和别的点的距离,容易被判成跨区。
+   所以打字时先去高德查一轮,让用户选中那条真记录,名字 / 地址 / 坐标一次带全。 */
+function waType(){
+  waClearPick();                    // 改了字就当作还没选过,别让旧地址配新名字
+  if(_waT)clearTimeout(_waT);
+  _waT=setTimeout(waPull,280);
+}
+function waPull(){
+  var ni=$('waName');if(!ni)return;
+  var kw=(ni.value||'').trim();
+  waHideSug();_waList=[];_waSel=-1;
+  if(_waKind!=='poi'||!kw||!API)return;   // 城市名不用查;没后端查了也是失败
+  var city=(($('waCity')&&$('waCity').value)||'').trim();
+  var seq=++_waSeq;
+  fetch(API+'/api/places?city='+encodeURIComponent(city)+'&kw='+encodeURIComponent(kw)+'&limit=7',
+        {cache:'no-store'})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(seq!==_waSeq)return;                       // 打字快时响应会乱序,迟到的必须丢掉
+      if((ni.value||'').trim()!==kw)return;         // 输入框已经不是那时候的内容了
+      _waList=(d&&d.places)||[];
+      if(!_waList.length){
+        waSugHint(d&&d.live===false
+          ? '当前没连上高德地图,只能照你打的字原样添加。'
+          : '高德里没有叫这个名字的地方,可以直接按原样添加。');
+        return;
+      }
+      waShowSug(kw);
+    })
+    .catch(function(){});
+}
+function waShowSug(kw){
+  var s=$('waSug');if(!s)return;
+  s.innerHTML='';_waSel=-1;
+  _waList.forEach(function(p,i){
+    var e=document.createElement('div');
+    e.className='sg';
+    e.innerHTML='<div class="sn">'+waMark(p.name,kw)+'</div>'+
+      (p.addr?'<div class="sa">'+esc(p.addr)+'</div>':'');
+    e.onclick=function(){waPick(i)};
+    s.appendChild(e);
+  });
+  s.classList.add('on');
+}
+function waSugHint(txt){
+  var s=$('waSug');if(!s)return;
+  s.innerHTML='<div class="shint">'+txt+'</div>';
+  s.classList.add('on');
+}
+function waHideSug(){var s=$('waSug');if(s)s.classList.remove('on')}
+/* 把命中的那段标出来,让用户看清这一条为什么被搜出来 */
+function waMark(name,kw){
+  kw=String(kw||'');name=String(name||'');
+  var i=kw?name.toLowerCase().indexOf(kw.toLowerCase()):-1;
+  if(i<0)return esc(name);
+  return esc(name.slice(0,i))+'<em>'+esc(name.slice(i,i+kw.length))+'</em>'+esc(name.slice(i+kw.length));
+}
+function waPick(i){
+  var p=_waList[i];if(!p)return;
+  var ni=$('waName'),ci=$('waCity');
+  _waSeq++;                                        // 作废在路上的请求,别替用户改回来
+  if(_waT){clearTimeout(_waT);_waT=null}
+  if(ni)ni.value=p.name;
+  // 城市空着就顺手补上:城市字段空 → 生成行程时认不出它属于哪座城 → 这条白收了
+  if(ci&&!(ci.value||'').trim()&&p.city)ci.value=p.city;
+  _waPick={name:p.name,lat:p.lat||0,lng:p.lng||0,addr:p.addr||'',type:p.type||''};
+  _waList=[];_waSel=-1;waHideSug();waShowFix();
+  if(ni)ni.focus();
+}
+function waShowFix(){
+  var f=$('waFix');if(!f)return;
+  if(!_waPick){f.classList.remove('on');f.innerHTML='';return}
+  f.classList.add('on');
+  f.innerHTML='<b>'+esc(_waPick.name)+'</b>'+
+    '<span>'+(_waPick.addr?esc(_waPick.addr):'已锁定到地图上的这个点')+'</span>'+
+    '<i title="取消锁定,改回手动输入">×</i>';
+  f.querySelector('i').onclick=function(){waClearPick();var ni=$('waName');if(ni)ni.focus()};
+}
+function waClearPick(){
+  _waPick=null;waShowFix();
+  if(_waT){clearTimeout(_waT);_waT=null}
+}
+function waMove(ev){
+  var s=$('waSug');if(!s||!s.classList.contains('on'))return false;
+  var rows=s.querySelectorAll('.sg');
+  if(ev.key==='Escape'){waHideSug();return true}
+  if(!rows.length||(ev.key!=='ArrowDown'&&ev.key!=='ArrowUp'))return false;
+  if(_waSel>=0&&rows[_waSel])rows[_waSel].classList.remove('sel');
+  _waSel=ev.key==='ArrowDown'?(_waSel+1)%rows.length:(_waSel<=0?rows.length-1:_waSel-1);
+  rows[_waSel].classList.add('sel');
+  if(rows[_waSel].scrollIntoView)rows[_waSel].scrollIntoView({block:'nearest'});
+  return true;
+}
+function waKey(ev){
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'||ev.key==='Escape'){
+    if(waMove(ev)){ev.preventDefault();return}
+  }
+  if(ev.key!=='Enter')return;
+  // 回车先看有没有高亮的那条:选中优先,否则用户的意图会被"添加"抢走
+  if(_waSel>=0&&_waList[_waSel]){ev.preventDefault();waPick(_waSel);return}
+  wishAddManual();
+}
+function wishAddReset(){
+  var ni=$('waName'),ci=$('waCity');
+  if(ni)ni.value='';if(ci)ci.value='';
+  _waSeq++;                                        // 作废还在路上的请求
+  waClearPick();waHideSug();
+  if(ni)ni.focus();
+}
+function wishAddManual(){
+  var ni=$('waName'),ci=$('waCity');
+  if(!ni)return;
+  var name=(ni.value||'').trim();
+  if(!name){toast('先输入一个名字');ni.focus();return}
+  if(_waKind==='city'){
+    wishAdd({kind:'city',name:name,city:name});
+    toast('已把「'+name+'」加入想去的城市');
+  }else{
+    var city=((ci&&ci.value)||'').trim();
+    wishAdd({kind:'poi',name:name,city:city,
+             lat:(_waPick&&_waPick.lat)||0,lng:(_waPick&&_waPick.lng)||0,
+             addr:(_waPick&&_waPick.addr)||''});
+    toast('已把「'+name+'」加入想去的地方'+
+          (_waPick&&_waPick.addr?' · 地址已补全':'')+
+          (city?'':' · 没填城市,挑城时它不会自动排进去'));
+  }
+  wishAddReset();
+}
+function wishToggle(kind,name,city,el,poi){
+  city=city||name;
+  var id=wishId(kind,name,city),hit=false;
+  (S.wish||[]).forEach(function(x){if(x.id===id)hit=true});
+  if(hit){
+    wishDel(id);toast('已移出想去清单');
+    wishEl(el,kind,false);
+  }else{
+    wishAdd({kind:kind,name:name,city:city,lat:(poi&&poi.lat)||0,lng:(poi&&poi.lng)||0});
+    toast('已加入想去清单');
+    wishEl(el,kind,true);
+  }
+  wishHint();
+}
+function wishEl(el,kind,on){
+  if(!el)return;
+  el.classList.toggle('on',on);
+  if(kind!=='city')el.textContent=on?'已想去':'想去';
+}
+/* 收藏名和 POI 名的对齐规则必须和后端 planner._norm_name 一模一样,
+   否则"收藏了却标不出来"——后端去空格去间隔号再小写,这里少一步就对不上。 */
+function wishNorm(n){
+  return String(n||'').replace(/\s/g,'').replace(/[·•]/g,'').toLowerCase();
+}
+/* 这座城里、还没去过的景点收藏 —— 生成行程时作为 wish 传给后端。
+   只收 poi 不收 city:城市收藏是"以后想去",不该影响当前这城的编排。 */
+function wishPoiNames(city){
+  var c=wishNorm(city),out=[],seen={};
+  (S.wish||[]).forEach(function(x){
+    if(!x||x.kind!=='poi'||x.done)return;
+    // city 字段可能带"市/区"后缀或用户手填的别名,取包含关系而非全等
+    var xc=wishNorm(x.city||'');
+    if(c&&xc&&c.indexOf(xc)<0&&xc.indexOf(c)<0)return;
+    var k=wishNorm(x.name);
+    if(!k||seen[k])return;
+    seen[k]=1;out.push(x.name);
+  });
+  return out;
+}
+/* 行程生成之后又新加的收藏:不在 wish_hit 也不在 wish_miss 里的,说明没参与这次排。
+   不做自动重排 —— 正在看的行程突然被换掉更吓人,给个按钮让他自己决定。 */
+function wishStale(plan){
+  if(!plan||!S.wish)return 0;
+  var used={};
+  (plan.wish_hit||[]).forEach(function(n){used[wishNorm(n)]=1});
+  (plan.wish_miss||[]).forEach(function(x){if(x)used[wishNorm(x.name)]=1});
+  // 后端没回 hit/miss(或走的本地示例数据)时,退回用"当时传了哪些"来判断
+  (plan.wish_sent||[]).forEach(function(n){used[wishNorm(n)]=1});
+  var n=0;
+  (S.wish||[]).forEach(function(x){
+    if(!x||x.kind!=='poi'||x.done)return;
+    if(!used[wishNorm(x.name)])n++;
+  });
+  return n;
+}
+function wishHint(){
+  // 首页已不再显示心愿计数,但保留这个函数:底部导航 tab 上可能需要显示角标
+  var n=(S.wish||[]).filter(function(x){return !x.done}).length;
+  var tb=$('tb-wish');
+  if(tb)tb.setAttribute('data-n',n?String(n):'');
+}
+function renderWish(){
+  var all=S.wish||[],todo=[],done=[];
+  all.forEach(function(x){x.done?done.push(x):todo.push(x)});
+  var nw=$('wishNone');
+  if(!nw)return;
+  nw.style.display=all.length?'none':'block';
+  if(!all.length)nw.innerHTML='还没有想去的地方。<br>在上面输入框里直接打字添加,或者回首页挑个城市点星标。';
+  $('wishTodoWrap').style.display=todo.length?'block':'none';
+  $('wishDoneWrap').style.display=done.length?'block':'none';
+  $('wishTodoN').textContent=todo.length;
+  $('wishTodo').innerHTML='';$('wishDone').innerHTML='';
+  todo.forEach(function(x){$('wishTodo').appendChild(wishRow(x))});
+  done.forEach(function(x){$('wishDone').appendChild(wishRow(x))});
+  $('wishSub').textContent=all.length?('共 '+all.length+' 个 · 去过 '+done.length+' 个'):'先攒着,以后有机会再去';
+  var sh=$('wishStoreHint');
+  if(sh)sh.textContent=API?'':'当前没连后端,清单只存在这台设备的浏览器里。';
+}
+function wishRow(x){
+  var e=document.createElement('div');
+  e.className='wishrow'+(x.done?' done':'');
+  e.innerHTML='<div class="wt"><div class="wn">'+esc(x.name)+'</div>'+
+    '<div class="wm">'+(x.kind==='poi'?'景点':'城市')+
+    (x.city&&x.city!==x.name?' · '+esc(x.city):'')+
+    (x.note?' · '+esc(x.note):'')+'</div>'+
+    (x.addr?'<div class="waddr">'+esc(x.addr)+'</div>':'')+'</div>'+
+    '<div class="wa">'+
+      '<div class="wb" title="'+(x.done?'标记为还没去':'标记去过')+'">'+
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg></div>'+
+      '<div class="wb" title="移出清单">'+
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div>'+
+    '</div>';
+  var wt=e.querySelector('.wt'),bs=e.querySelectorAll('.wb');
+  wt.onclick=function(){
+    // 景点就跳它所在的城市:孤零零定位一个点没有上下文,不如整城打开让他自己找
+    var to=(x.kind==='poi'&&x.city)?x.city:x.name;
+    pickCityName(to);
+    if(x.kind==='poi')toast('已切到 '+x.city+',在全城列表里能看到 '+x.name);
+  };
+  bs[0].onclick=function(){wishMark(x.id,!x.done)};
+  bs[1].onclick=function(){wishDel(x.id);toast('已移出清单')};
+  return e;
+}
+
 function cityCell(c,on){
   var e=document.createElement('div');
   e.className='cityc'+(on?' on':'');
   var demo=!!RAW[c.n];
-  e.innerHTML='<div class="cn">'+c.n+(demo?'<span class="dot"></span>':'')+'</div><div class="cp">'+c.p+'</div>';
+  e.innerHTML='<div class="cn">'+c.n+(demo?'<span class="dot"></span>':'')+'</div><div class="cp">'+c.p+'</div>'+
+    '<div class="star'+(wishHas('city',c.n,c.n)?' on':'')+'" title="加入 / 移出想去清单">'+STAR_SVG+'</div>';
   e.onclick=function(){pickCityName(c.n)};
+  // 星标要吃掉点击:整卡是"进入这座城",手一抖就跳走了,收藏反而没点上
+  var st=e.querySelector('.star');
+  st.onclick=function(ev){ev.stopPropagation();wishToggle('city',c.n,c.n,st)};
   return e;
 }
 function renderCityGrid(){
@@ -860,7 +1645,9 @@ function pickCityName(v){
   S.stay=readStay(S.city);        // 落脚点按城市各记一份,换城市要跟着换
   renderStay();
   destroyCityMap();               // 旧城市的全城地图实例整个销毁,避免标记/视角残留
-  var rh=$('restoreHint');if(rh)rh.style.display='none';   // 旧行程已失效,隐藏恢复提示
+  // 换了城市,上次的行程就不作数了 —— 首页那张「接着上次的走」卡片要收掉,
+  // 免得点了进到一个和当前城市不符的行程里。
+  hideResume();
   var si=$('citySearch');if(si)si.value='';
   showPage('city');      // 先切页(容器要有尺寸才能初始化地图),再由 loadCityPois 拉数据渲染
   loadCityPois();
@@ -994,6 +1781,11 @@ function renderCityOpts(){
   var q=$('cPaceSel');q.innerHTML='';
   PACES.forEach(function(f){var e=document.createElement('div');e.className='chip'+(S.pace===f?' on':'');e.textContent=f;
     e.onclick=function(){S.pace=f;renderCityOpts()};q.appendChild(e)});
+  // 底部常驻栏的摘要:选了什么一眼能看到,不用滚回上面确认
+  var cbn=$('cbCity'),cbg=$('cbCfg');
+  if(cbn)cbn.textContent=S.city?cityLabel():'还没选城市';
+  if(cbg)cbg.textContent=S.days+' 天 · '+S.pace+'节奏'+
+    (S.prefs.length?' · '+S.prefs.join('/'):'')+(S.typeFilter?' · 只看'+S.typeFilter:'');
 }
 
 /* 类型筛选:取该城出现最多的几种类型 */
@@ -1006,7 +1798,9 @@ function renderTypeFilter(){
   function mk(name,n){
     var e=document.createElement('div');
     var all=(name==='全部');
-    e.className='chip'+(all?!S.typeFilter:S.typeFilter===name?' on':'');
+    // 之前这里写的是 'chip'+(all?!S.typeFilter:...) —— 未筛选时 !S.typeFilter 是 true,
+    // 拼出来 class="chiptrue",「全部」这个标签从来没被样式化过,一直渲染成裸文本。
+    e.className='chip'+(all?(!S.typeFilter?' on':''):(S.typeFilter===name?' on':''));
     e.textContent=name+(n?' · '+n:'');
     // 「全部」是清空筛选,不是把类型设成 "全部" —— 写成后者会让 shownPois 一条也匹配不上
     e.onclick=function(){S.typeFilter=all?'':(S.typeFilter===name?'':name);renderCity()};
@@ -1016,12 +1810,82 @@ function renderTypeFilter(){
   list.slice(0,7).forEach(function(x){mk(x[0],x[1])});
   $('typeLb').textContent='只看这类景点 · 共 '+cityPois().length+' 个';
 }
+/* ---------- 行程页就地调参 ----------
+ * 以前想改天数得退回全城页重来一遍,而行程页明明就摆着天数栏 —— 看着能调却调不了。
+ * 改完自动重排,但连点会合并成一次请求(700ms 内的多次改动只发一次),
+ * 不然点三下节奏就打三次后端,白等三遍。 */
+var TUNE_KEY='tm_tune_open',_tuneT=null;
+function initTune(){
+  var b=$('tuneBody');if(!b)return;
+  var open=false;
+  try{open=localStorage.getItem(TUNE_KEY)==='1'}catch(e){}
+  b.style.display=open?'':'none';
+  $('tuneCaret').textContent=open?'收起':'调整';
+}
+function toggleTune(){
+  var b=$('tuneBody');if(!b)return;
+  var open=b.style.display==='none';
+  b.style.display=open?'':'none';
+  $('tuneCaret').textContent=open?'收起':'调整';
+  try{localStorage.setItem(TUNE_KEY,open?'1':'')}catch(e){}
+}
+function renderTune(){
+  if(!$('tDaySel'))return;
+  var h=$('tDaySel');h.innerHTML='';
+  for(var i=1;i<=5;i++){
+    (function(n){
+      var e=document.createElement('div');e.className='dayc'+(n===S.days?' on':'');e.textContent=n+' 天';
+      e.onclick=function(){S.days=n;renderTune();tuneBump()};h.appendChild(e);
+    })(i);
+  }
+  var q=$('tPaceSel');q.innerHTML='';
+  PACES.forEach(function(f){
+    var e=document.createElement('div');e.className='chip'+(S.pace===f?' on':'');e.textContent=f;
+    e.onclick=function(){S.pace=f;renderTune();tuneBump()};q.appendChild(e);
+  });
+  var p=$('tPrefSel');p.innerHTML='';
+  PREFS.forEach(function(f){
+    var e=document.createElement('div');e.className='chip'+(S.prefs.indexOf(f[0])>=0?' on':'');e.textContent=f[0];
+    e.onclick=function(){
+      var ix=S.prefs.indexOf(f[0]);
+      if(ix>=0)S.prefs.splice(ix,1);else S.prefs.push(f[0]);
+      renderTune();tuneBump();
+    };p.appendChild(e);
+  });
+  var s=$('tuneSum');
+  if(s)s.textContent=S.days+' 天 · '+S.pace+(S.prefs.length?' · '+S.prefs.join('/'):'');
+  var f=$('tuneFoot');
+  if(f&&!_tuneT)f.innerHTML='<span class="tn-tip">改完自动重排 · 也可以先收起</span>';
+}
+function tuneBump(){
+  var f=$('tuneFoot');
+  if(f)f.innerHTML='<span class="tn-wait">已改,正在按新设置重排…</span>';
+  if(_tuneT)clearTimeout(_tuneT);
+  _tuneT=setTimeout(function(){_tuneT=null;tuneApply()},700);
+}
+function tuneApply(){
+  if(!S.plan)return;
+  // 重排的是当前这份行程,城市以行程为准 —— 万一中间手滑选过别的城,不能排成那座城的
+  if(S.plan.city&&S.plan.city!==S.city){
+    S.city=S.plan.city;
+    try{S.stay=readStay(S.city)}catch(e){}
+    renderStay();
+  }
+  startPlan(true);
+}
+/* 这个景点是不是被收藏过。只认 poi 类型 —— 城市收藏不是景点,别在行程卡上乱标。 */
+function wishOn(name){
+  var k=wishNorm(name),hit=false;
+  (S.wish||[]).forEach(function(x){if(x&&x.kind==='poi'&&wishNorm(x.name)===k)hit=true});
+  return hit;
+}
 function renderTrip(){
   var plan=S.plan,days=plan.days,i;
   $('tripTitle').textContent=plan.city+' · '+days.length+' 天';
   $('tripSub').textContent=plan.pace+'节奏 · 每天 '+PERDAY[plan.pace]+' 个点';
   $('srcBadge').textContent=S.live?'真实数据':'示例数据';
   $('srcBadge').className='badge'+(S.live?' live':'');
+  renderTune();          // 调参条上的摘要跟着当前行程走
   var t=$('dayTabs');t.innerHTML='';
   days.forEach(function(d,ix){var e=document.createElement('div');e.className='tab'+(ix===S.di?' on':'');e.textContent='第 '+d.day+' 天';
     e.onclick=function(){S.di=ix;renderTrip()};t.appendChild(e)});
@@ -1034,7 +1898,11 @@ function renderTrip(){
     '<div class="sumc"><div class="k">游玩</div><div class="v">'+Math.floor(play/60)+' 小时</div></div>'+
     '<div class="sumc"><div class="k">结束时间</div><div class="v">'+hhmm(tl.end)+'</div></div>'+
     '<div class="sumc"><div class="k">门票合计</div><div class="v">'+(cost?'¥'+cost:'免费')+'</div></div>'+
-    (day.note?'<div class="daynote">本日思路:'+day.note+'</div>':'');
+    (day.note?'<div class="daynote">本日思路:'+day.note+'</div>':'')+
+    ((day.dropped&&day.dropped.length)?
+      '<div class="daydrop">为保证当天按时结束,已移出 <b>'+
+      day.dropped.map(function(x){return x&&x.name}).filter(Boolean).join('、')+
+      '</b> · 可在下方备选里手动加回</div>':'');
 
   // 行程整体思路(AI 综合考量后的总纲),存在才显示,避免重复插入。
   // 必须插在吸顶块**外面**:放在标题栏里的话,下滑时会被浮上来的天数栏压住。
@@ -1066,6 +1934,28 @@ function renderTrip(){
     hnEl.style.display='block';
   }else{hnEl.style.display='none'}
 
+  // 收藏兑现情况:排上了要让他看见,没排上要说清为什么 ——
+  // 静默忽略最伤信任,用户会以为"收藏功能没接上"。
+  var wb=document.getElementById('wishBox');
+  if(!wb){wb=document.createElement('div');wb.id='wishBox';
+    $('hotNotes').insertAdjacentElement('afterend',wb);}
+  var wHit=(plan.wish_hit||[]).filter(Boolean),wMiss=(plan.wish_miss||[]).filter(Boolean);
+  var wStale=wishStale(plan);
+  if(wHit.length||wMiss.length||wStale){
+    wb.className='pnote wishbox';
+    wb.innerHTML='<h3><span class="ai ws">你收藏的</span>'+
+      '<span style="font-size:11px;font-weight:400;color:var(--tx3);margin-left:6px">'+
+      '优先排了,但没为了它硬绕路</span></h3><ul>'+
+      (wHit.length?'<li class="whit"><b>已排入</b> '+esc(wHit.join('、'))+'</li>':'')+
+      wMiss.map(function(x){
+        return '<li class="wmiss"><b>'+esc(x.name)+'</b> · '+esc(x.reason||'这次没排下')+'</li>'}).join('')+
+      (wStale?'<li class="wstale">还有 <b>'+wStale+'</b> 个收藏是这次生成之后新加的,'+
+        '重新生成才会把它们算进去。'+
+        '<span class="wgo" onclick="startPlan(true)">重新生成</span></li>':'')+
+      '</ul>';
+    wb.style.display='block';
+  }else{wb.style.display='none'}
+
   var box=$('timeline'),idx=0;box.innerHTML='';
   tl.nodes.forEach(function(n){
     if(n.kind==='move'){
@@ -1091,10 +1981,13 @@ function renderTrip(){
     // 当下热点:联网核实地图上确有其地才打这个标。hot_why 是模型给的理由,属外部文本,转义后再插
     var hotTag=n.poi.hot?'<span class="tg hot">当下热点</span>':'';
     var hotWhy=(n.poi.hot&&n.poi.hot_why)?'<div class="hotwhy">'+esc(n.poi.hot_why)+'</div>':'';
-    var c=document.createElement('div');c.className='node';
+    var wsh=wishOn(n.poi.name);
+    // 收藏标要放在第一个:一眼能看到,不用在标签堆里找
+    var wishTag=wsh?'<span class="tg wish">你收藏过</span>':'';
+    var c=document.createElement('div');c.className='node'+(wsh?' wished':'');
     c.innerHTML='<div class="dot">'+idx+'</div><div class="stamp">'+hhmm(n.arrive)+' – '+hhmm(n.leave)+' · 停留 '+dur(n.poi.duration)+(bt?' · '+bt:'')+'</div>'+
       '<div class="card"><div class="hd"><div class="nm">'+n.poi.name+'</div><div class="sc">'+n.poi.rating.toFixed(1)+'</div></div>'+
-      '<div class="meta"><span class="tg">'+n.poi.type+'</span><span class="tg">'+(n.poi.cost?'人均 ¥'+n.poi.cost:'免费')+'</span>'+
+      '<div class="meta">'+wishTag+'<span class="tg">'+n.poi.type+'</span><span class="tg">'+(n.poi.cost?'人均 ¥'+n.poi.cost:'免费')+'</span>'+
       n.poi.tags.slice(0,2).map(function(x){return '<span class="tg">'+x+'</span>'}).join('')+
       (n.poi.indoor?'<span class="tg">室内</span>':'')+
       hotTag+(bt?'<span class="tg hl">'+bt+'</span>':'')+'</div>'+
@@ -1178,14 +2071,6 @@ function pinIcon(n){
   return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
 
-// 全城模式下用的小灰针,和当天的编号绿气泡区分开
-function dotIcon(){
-  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="30" viewBox="0 0 24 30">'+
-    '<path d="M12 29C12 29 22 18 22 11C22 5.5 17.5 1 12 1C6.5 1 2 5.5 2 11C2 18 12 29 12 29Z" fill="#8A8F89" stroke="#fff" stroke-width="2"/>'+
-    '<circle cx="12" cy="11" r="4" fill="#fff"/></svg>';
-  return 'data:image/svg+xml,'+encodeURIComponent(svg);
-}
-
 function fitDay(items){
   if(!MAP.map||!items.length)return;
   var b=new TMap.LatLngBounds();
@@ -1193,28 +2078,8 @@ function fitDay(items){
   MAP.map.fitBounds(b,{padding:{top:60,bottom:60,left:50,right:50}});
 }
 
-// 全城景点层:只画当天行程之外的点,当天的由编号标记盖在上面
-function buildCityLayer(items){
-  var geos=[],dayIds={},i;
-  items.forEach(function(p){dayIds[p.id]=1});
-  if(S.mapMode==='city'){
-    cityPois().forEach(function(p,i){
-      if(dayIds[p.id])return;
-      geos.push({id:'c'+i,styleId:'cp',position:new TMap.LatLng(p.lat,p.lng),
-        properties:{title:p.name+' · '+Number(p.rating).toFixed(1)+' 分 · '+p.type}});
-    });
-  }
-  if(MAP.city){MAP.city.setGeometries(geos);return}
-  MAP.city=new TMap.MultiMarker({id:'city',map:MAP.map,
-    styles:{cp:new TMap.MarkerStyle({width:24,height:30,anchor:{x:12,y:30},src:dotIcon()})},
-    geometries:geos});
-  MAP.city.on('click',function(evt){
-    if(!MAP.info)return;
-    MAP.info.setPosition(evt.geometry.position);
-    MAP.info.setContent('<div style="padding:6px 10px;font-size:12.5px;white-space:nowrap">'+evt.geometry.properties.title+'</div>');
-    MAP.info.open();
-  });
-}
+/* 地图页只画当天路线。以前还有一层"全城候选"灰针,可全城页本来就有一整张三维地图
+   干这件事 —— 两个页面各维护一份地图实例、还各画一遍,改了这边忘了那边。去掉。 */
 
 function buildLayers(items){
   var styles={},geos=[],labels=[],i;
@@ -1250,9 +2115,7 @@ function buildLayers(items){
       styles:{rt:new TMap.PolylineStyle({color:'#0F7A57',width:6,borderWidth:1,borderColor:'#fff',
         showArrow:true,arrowOptions:{space:60},lineCap:'round'})},geometries:lineGeo});
   }
-  buildCityLayer(items);
-  // 全城模式把视野拉到整座城市,当天模式只框住今天的点
-  fitDay(S.mapMode==='city'?cityPois():items);
+  fitDay(items);   // 视野框住今天的点
 }
 
 function initMap3D(items){
@@ -1302,7 +2165,7 @@ function renderSchematic(items,box){
 /* 兜底提示:告诉用户为什么没有真实底图,以及怎么补救 */
 function showMapHint(){
   $('mapCtl').style.display='none';
-  $('mapModeCtl').style.display='none';
+  $('mapDayCtl').style.display='none';
   $('mapSub').textContent='示意图 · 非真实底图';
   $('mapHint').innerHTML=((TMAP_KEY||proxyReady())
     ? '底图加载失败,检查网络后重试。'
@@ -1324,26 +2187,20 @@ function destroyCityMap(){
 
 function renderMapList(items){
   var L=$('mapList');L.innerHTML='';
-  var cityMode=(S.mapMode==='city');
-  var list=cityMode?cityPois().slice().sort(function(a,b){return b.rating-a.rating}):items;
-  if(cityMode){
-    var h=document.createElement('div');
-    h.style.cssText='font-size:12px;color:var(--tx3);padding:0 2px 10px';
-    h.textContent='全城共 '+list.length+' 个候选景点,按评分排序 · 点一条可定位';
-    L.appendChild(h);
-  }
-  list.forEach(function(p,ix){
-    var inPlan=false;
-    if(cityMode)(S.plan.days||[]).forEach(function(d){if((d.items||[]).some(function(x){return x.id===p.id}))inPlan=true});
+  var h=document.createElement('div');
+  h.style.cssText='font-size:12px;color:var(--tx3);padding:0 2px 10px';
+  h.textContent='按走的先后顺序 · 点一条飞到那个点';
+  L.appendChild(h);
+  items.forEach(function(p,ix){
     var e=document.createElement('div');e.className='card';e.style.marginBottom='8px';
-    e.innerHTML='<div class="hd"><div class="nm">'+(cityMode?'':'<span style="color:var(--brand);font-weight:500">'+(ix+1)+'&nbsp;&nbsp;</span>')+
-      p.name+(inPlan?'<span class="tg" style="margin-left:6px;background:var(--brand-soft);color:var(--brand);border-color:var(--brand-line)">已排</span>':'')+
-      '</div><div class="sc">'+Number(p.rating).toFixed(1)+'</div></div>'+
+    e.innerHTML='<div class="hd"><div class="nm">'+
+      '<span style="color:var(--brand);font-weight:500">'+(ix+1)+'&nbsp;&nbsp;</span>'+
+      p.name+'</div><div class="sc">'+Number(p.rating).toFixed(1)+'</div></div>'+
       '<div class="meta"><span class="tg">'+p.type+'</span>'+
-      (cityMode?'<span class="tg">停留 '+dur(p.duration)+'</span>':'<span class="tg">停留 '+dur(p.duration)+'</span>')+
+      '<span class="tg">停留 '+dur(p.duration)+'</span>'+
       '<span class="tg">'+(p.cost?'¥'+p.cost:'免费')+'</span>'+
       (p.indoor?'<span class="tg">室内</span>':'')+'</div>';
-    if(cityMode&&MAP.map){
+    if(MAP.map){
       e.onclick=function(){
         _scrollMapIntoView('mapBox');
         _flyTMap(MAP.map,p.lat,p.lng,16);
@@ -1357,20 +2214,19 @@ function renderMapList(items){
 function renderMap(){
   if(!S.plan||!S.plan.days)return;
   var day=S.plan.days[S.di],items=day.items||[];
-  var cityMode=(S.mapMode==='city');
-  $('mapTitle').textContent=cityMode?('全城景点 · '+cityLabel()):('第 '+day.day+' 天路线');
+  $('mapTitle').textContent='第 '+day.day+' 天路线';
+  renderMapDayCtl();
   renderMapList(items);
   if(!items.length){$('mapBox').innerHTML='';return}
   loadTMap(function(ok){
     if(!ok){destroyMap();showMapHint();renderSchematic(items);return}
     try{
       if(MAP.ready)buildLayers(items); else initMap3D(items);
-      $('mapSub').textContent=cityMode
-        ? '灰针是全城候选 · 绿点是第 '+day.day+' 天'
-        : (S.base==='sat'?'卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称');
+      $('mapSub').textContent=S.base==='sat'
+        ? '卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称';
       $('mapHint').textContent='';
       $('mapCtl').style.display='flex';
-      $('mapModeCtl').style.display='flex';
+      $('mapDayCtl').style.display=(S.plan.days.length>1)?'flex':'none';
     }catch(e){
       mapLog('地图初始化抛错:'+e.message);
       destroyMap();showMapHint();renderSchematic(items);
@@ -2190,8 +3046,12 @@ function poiRow(p){
     (p.best_time_label?'<span class="tg hl">'+p.best_time_label+'</span>':'')+
     '<span class="tg">'+(p.cost?'人均 ¥'+p.cost:'免费')+'</span>'+
     (p.indoor?'<span class="tg">室内</span>':'')+'</div>'+
-    (p.highlight?'<div class="hl">'+p.highlight+'</div>':'');
+    (p.highlight?'<div class="hl">'+p.highlight+'</div>':'')+
+    '<button class="wishbtn'+(wishHas('poi',p.name,p.city||S.city)?' on':'')+'">'+
+    (wishHas('poi',p.name,p.city||S.city)?'已想去':'想去')+'</button>';
   e.onclick=function(){cityFocus(p)};
+  var wb=e.querySelector('.wishbtn');
+  wb.onclick=function(ev){ev.stopPropagation();wishToggle('poi',p.name,p.city||S.city,wb,p)};
   return e;
 }
 
@@ -2397,11 +3257,18 @@ function startPlan(fresh){
   finish();
 }
 function _planBody(){
+  var wn=wishPoiNames(cityLabel());
+  S.wishSent=wn;                 // 记下这次带上了哪些收藏,便于事后判断"有没有排"
   return JSON.stringify({city:cityLabel(),days:S.days,prefs:S.prefs,
-                         pace:S.pace,fresh:!!S.planFresh,base:stayRece()});
+                         pace:S.pace,fresh:!!S.planFresh,base:stayRece(),wish:wn});
 }
 function enter(){$('tabbar').classList.remove('hide');S.di=0;savePlan();go('trip')}
-function localPlan(){S.plan=buildPlan(S.city,S.days,S.prefs,S.pace);enter()}
+function localPlan(){
+  S.plan=buildPlan(S.city,S.days,S.prefs,S.pace);
+  // 本地示例数据不认收藏,如实记下来:免得行程页去查 wish_hit 得出"都排上了"的错结论
+  S.plan.wish_sent=[];
+  enter();
+}
 function finish(){
   if(_ld.cancel)return;
   if(!API){                                   // 无后端:示例数据也要走一遍反馈
@@ -2463,6 +3330,7 @@ function applyPlan(d){
   if(_ld.cancel)return;
   planProgress({stage:'done',detail:'行程已就绪',pct:1});
   S.plan=d;S.live=!!d.live;
+  d.wish_sent=S.wishSent||[];   // 后端不一定回 hit/miss,自己留一份才知道有没有漏
   // 后端回写的落脚点补进本地状态:只有名字没有坐标的话算不出通勤,就不收。
   if(d&&d.base&&typeof d.base.lat==='number'){S.stay={name:d.base.name,lat:d.base.lat,lng:d.base.lng,addr:d.base.addr||''};writeStay(S.city,S.stay);renderStay()}
   enter();                  // 先把行程页渲染出来,再撤遮罩 —— 否则会闪一下空白
@@ -2505,11 +3373,16 @@ function syncBackend(){
 }
 /* 只切页面,不触发渲染 */
 function showPage(p){
-  ['home','city','trip','map'].forEach(function(x){$('p-'+x).classList.toggle('on',x===p)});
+  ['home','city','trip','map','wish'].forEach(function(x){$('p-'+x).classList.toggle('on',x===p)});
+  // 首页(选城市)也在导航里占一格:否则从别的页回不去选城市的入口
+  $('tb-home').classList.toggle('on',p==='home');
   $('tb-city').classList.toggle('on',p==='city');
+  $('tb-wish').classList.toggle('on',p==='wish');
   $('tb-trip').classList.toggle('on',p==='trip');
   $('tb-map').classList.toggle('on',p==='map');
-  $('tabbar').classList.toggle('hide',p==='home');
+  $('tabbar').classList.remove('hide');
+  // 常驻行动栏只在全城页出现
+  var cb=$('cityBar');if(cb)cb.classList.toggle('on',p==='city');
   document.querySelector('.body').scrollTop=0;
   syncSticky();
 }
@@ -2519,6 +3392,23 @@ function syncSticky(){
   var b=document.querySelector('.body'),h=$('tripHead');
   if(!b||!h)return;
   h.classList.toggle('mini',b.scrollTop>24);
+}
+/* 密度开关:默认「详细」—— 每个点的排布理由全部摊开,这是这个应用最有价值的信息。
+   嫌一屏只放得下一个点时切「紧凑」,收起的只是解释性文字(排布理由/亮点/AI 建议),
+   时间、名称、游玩时长、标签一律保留。选择记在 localStorage 里。 */
+function toggleDense(){
+  var on=!document.body.classList.contains('dense');
+  setDense(on);
+  try{localStorage.setItem('tm_dense',on?'1':'0')}catch(e){}
+}
+function setDense(on){
+  document.body.classList.toggle('dense',!!on);
+  var b=$('denseBtn');if(b)b.textContent=on?'详细':'紧凑';
+}
+function initDense(){
+  var on=false;
+  try{on=localStorage.getItem('tm_dense')==='1'}catch(e){}
+  setDense(on);
 }
 function go(p){
   // 还没生成行程就点「行程 / 地图」,那两页是空的。挡回全城页并说一句
@@ -2531,6 +3421,7 @@ function go(p){
   if(p==='trip'&&S.plan)renderTrip();
   showPage(p);
   if(p==='map')renderMap();
+  if(p==='wish')renderWish();
   if(p==='city'&&S.city&&cityPois().length)renderCity();
 }
 
@@ -2584,17 +3475,26 @@ function finishProbe(base){
     .then(function(c){if(c&&c.cities&&c.cities.length)S.remoteCities=c.cities}).catch(function(){});
 }
 
-/* 范围切换:当天行程 / 全城景点 */
-$('mapModeCtl').querySelectorAll('.chip').forEach(function(c){
-  c.onclick=function(){
-    var m=c.getAttribute('data-mode');
-    if(S.mapMode===m)return;
-    $('mapModeCtl').querySelectorAll('.chip').forEach(function(x){x.classList.remove('on')});
-    c.classList.add('on');
-    S.mapMode=m;
-    renderMap();
-  };
-});
+/* 地图页切天数。全城景点模式已移除 —— 那是全城页的活儿,重复做只会两边不一致。 */
+function renderMapDayCtl(){
+  var box=$('mapDayCtl');if(!box)return;
+  var days=(S.plan&&S.plan.days)||[];
+  if(days.length<2){box.style.display='none';box.innerHTML='';return}
+  box.style.display='flex';
+  box.innerHTML='';
+  days.forEach(function(d,ix){
+    var e=document.createElement('div');
+    e.className='chip'+(ix===S.di?' on':'');
+    e.textContent='第 '+d.day+' 天';
+    e.onclick=function(){
+      if(S.di===ix)return;
+      S.di=ix;
+      renderMapDayCtl();
+      renderMap();
+    };
+    box.appendChild(e);
+  });
+}
 
 /* 全城地图:视角(俯视/旋转) + 底图(卫星/街道·交通图) */
 $('cityViewCtl').querySelectorAll('.chip').forEach(function(c){
@@ -2650,6 +3550,11 @@ syncSticky();
 renderHome();probe();
 try{S.stay=readStay(S.city)}catch(e){}      // 上次的落脚点,进页面就恢复
 renderStay();
+initDense();          // 上次选的「紧凑 / 详细」要带回来
+initTune();           // 调参条是展开还是收起,也记一下
+initWishAdd();        // 想去页手动添加:类型切换按钮绑定
+// 心愿清单要等探测结束:没后端时它降级读 localStorage,有后端就得等 API 地址定下来
+probeReady(function(){loadWish()});
 /* 上次生成过的行程会从本地恢复,参数(城市/天数/偏好/节奏)一起带回来 */
 if(restorePlan()){
   // 城市可能是被行程带回来的,落脚点要按这个城市重读一份
@@ -2657,14 +3562,12 @@ if(restorePlan()){
   renderStay();
   renderHome();
   $('tabbar').classList.remove('hide');
-  var rh=$('restoreHint');rh.style.display='block';
-  rh.innerHTML='已恢复上次的「'+cityLabel()+' · '+S.days+' 天」行程 · '+
-    '<span class="k" style="cursor:pointer" onclick="go(\'trip\')">查看</span>'+
-    '<span style="color:var(--tx3);margin-left:12px;cursor:pointer" onclick="dropPlan()">忽略</span>';
+  renderHomeResume();      // 首页那张「接着上次的走」卡片
 }
 function dropPlan(){
   try{localStorage.removeItem(PLAN_KEY)}catch(e){}
-  $('restoreHint').style.display='none';S.plan=null;
+  S.plan=null;
+  hideResume();
 }
 </script>
 </body>
