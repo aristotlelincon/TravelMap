@@ -596,10 +596,12 @@ def _parse_polyline(polyline: str):
 def boundary(city: str):
     """
     获取城市行政边界 GeoJSON。失败返回 None。
-    优先读磁盘/内存缓存,避免每次切城市都请求。
+    优先级:内存缓存 > 磁盘缓存 > 高德接口。
+
+    缓存查完**才**看有没有 KEY —— 以前 `if not LIVE: return None` 写在最前面,
+    没配 AMAP_KEY 时连已经落盘的真实市界都不给,前端只能退化成示意轮廓。
+    边界是"查过一次就不会变"的东西,拉到过就该一直能用。
     """
-    if not LIVE:
-        return None
     key = (city or "").strip()
     if not key:
         return None
@@ -612,6 +614,9 @@ def boundary(city: str):
     if got:
         _BOUNDARY_CACHE[key] = got
         return got
+
+    if not LIVE:
+        return None
 
     # 关键词歧义处理:高德 district 接口按 keywords 模糊匹配,
     # 比如 "西安" 会同时返回吉林的「西安区」和陕西的「西安市」,且区可能排在市前面。
@@ -717,3 +722,147 @@ def route_time(a: dict, b: dict, city: str = "") -> tuple:
     _ROUTE_CACHE[key] = res
     store.write("route", key, res)
     return tuple(res)
+
+
+# ---------- 站间真实道路折线(给地图画"导航式"行动路线) ----------
+
+_PATH_CACHE = {}          # 进程内缓存:同一串景点顺序不重复打路由服务
+
+
+def _out_of_china(lat, lng):
+    return not (73.66 < lng < 135.05 and 3.86 < lat < 53.55)
+
+
+def wgs84_to_gcj02(lat, lng):
+    """WGS-84 → GCJ-02(火星坐标)。OSRM 等国外路由服务给的是 WGS-84,
+    要转成和高德 POI 同一坐标系,前端才能用同一套 gcj02ToWgs84 把它们画到一张底图上。"""
+    if _out_of_china(lat, lng):
+        return lat, lng
+    a = 6378245.0
+    ee = 0.00669342162296594323
+
+    def tlat(x, y):
+        r = (-100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(abs(x)))
+        r += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0
+        r += (20.0 * math.sin(y * math.pi) + 40.0 * math.sin(y / 3.0 * math.pi)) * 2.0 / 3.0
+        r += (160.0 * math.sin(y / 12.0 * math.pi) + 320.0 * math.sin(y * math.pi / 30.0)) * 2.0 / 3.0
+        return r
+
+    def tlng(x, y):
+        r = (300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(abs(x)))
+        r += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0
+        r += (20.0 * math.sin(x * math.pi) + 40.0 * math.sin(x / 3.0 * math.pi)) * 2.0 / 3.0
+        r += (150.0 * math.sin(x / 12.0 * math.pi) + 300.0 * math.sin(x / 30.0 * math.pi)) * 2.0 / 3.0
+        return r
+
+    dlat = tlat(lng - 105.0, lat - 35.0)
+    dlng = tlng(lng - 105.0, lat - 35.0)
+    radlat = lat / 180.0 * math.pi
+    magic = math.sin(radlat)
+    magic = 1 - ee * magic * magic
+    sqrtmagic = math.sqrt(magic)
+    dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * math.pi)
+    dlng = (dlng * 180.0) / (a / sqrtmagic * math.cos(radlat) * math.pi)
+    return lat + dlat, lng + dlng
+
+
+def gcj02_to_wgs84(lat, lng):
+    """GCJ-02 → WGS-84(一次迭代近似,误差 < 1 米,画地图足够)。"""
+    if _out_of_china(lat, lng):
+        return lat, lng
+    glat, glng = wgs84_to_gcj02(lat, lng)
+    return lat * 2 - glat, lng * 2 - glng
+
+
+def _parse_route_polyline(s: str) -> list:
+    """高德 path polyline: 'lng,lat;lng,lat;...' —— 用 ';' 拆点即可。"""
+    out = []
+    if not s:
+        return out
+    for pt in s.split(";"):
+        pt = pt.strip()
+        if not pt:
+            continue
+        try:
+            lng, lat = (float(x) for x in pt.split(","))
+            out.append([round(lng, 6), round(lat, 6)])
+        except Exception:
+            continue
+    return out
+
+
+def _amap_route_path(a: dict, b: dict) -> list:
+    """高德真实道路折线(GCJ-02)。近的走步行,远的走驾车。失败返回两点直线。"""
+    straight = haversine(a["lat"], a["lng"], b["lat"], b["lng"])
+    mode = "/direction/walking" if straight < 1.5 else "/direction/driving"
+    try:
+        d = _get(mode, origin=f'{a["lng"]},{a["lat"]}', destination=f'{b["lng"]},{b["lat"]}')
+        paths = (d.get("route") or {}).get("paths") or []
+        if paths:
+            pts = _parse_route_polyline(paths[0].get("polyline") or "")
+            if len(pts) >= 2:
+                return pts
+    except Exception:
+        pass
+    return [[a["lng"], a["lat"]], [b["lng"], b["lat"]]]
+
+
+def _osrm_route_all(pts_wgs) -> list:
+    """无高德 Key 时的兜底:OSRM 公共路由(步行),一次请求串起所有途经点,
+    返回 WGS-84 折线。后端调用不受浏览器 CORS 限制。失败返回空列表。"""
+    if len(pts_wgs) < 2:
+        return []
+    coords = ";".join(f"{w[1]},{w[0]}" for w in pts_wgs)   # OSRM 要 lng,lat
+    try:
+        url = (f"https://router.project-osrm.org/route/v1/foot/{coords}"
+               f"?overview=full&geometries=geojson")
+        req = urllib.request.Request(url, headers={"User-Agent": "travel-planner/0.1"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            d = json.loads(resp.read().decode("utf-8"))
+        co = (d.get("routes") or [{}])[0].get("geometry", {}).get("coordinates") or []
+        if len(co) >= 2:
+            return [[round(x[0], 6), round(x[1], 6)] for x in co]   # [lng,lat] WGS-84
+    except Exception:
+        pass
+    return []
+
+
+def route_path_all(pts_gcj, city: str = "") -> list:
+    """
+    把一串按行程顺序排列的景点([lng,lat] GCJ-02)连成"沿真实道路"的折线,
+    统一返回 GCJ-02 [[lng,lat],...],前端再用 gcj02ToWgs84 画到 WGS-84 底图(与景点一致)。
+
+      - 有 Key:段段高德(步行/驾车),拼接时去掉相邻重复衔接点。
+      - 无 Key:OSRM 公共服务一次串起所有途经点(需运行环境能出网),WGS→GCJ 转回。
+      - 都拿不到:退化为两点直线(GCJ-02),前端不会白屏,只是不贴路。
+    """
+    key = city + "|" + ";".join(f"{p[0]:.5f},{p[1]:.5f}" for p in pts_gcj)
+    hit = _PATH_CACHE.get(key)
+    if hit:
+        return hit
+    pts = [list(p) for p in pts_gcj]
+    if len(pts) < 2:
+        _PATH_CACHE[key] = pts
+        return pts
+    out = []
+    if LIVE:
+        for i in range(len(pts) - 1):
+            a = {"lng": pts[i][0], "lat": pts[i][1]}
+            b = {"lng": pts[i + 1][0], "lat": pts[i + 1][1]}
+            s = _amap_route_path(a, b)
+            if not out:
+                out = list(s)
+            elif out[-1] == s[0]:
+                out.extend(s[1:])
+            else:
+                out.extend(s)
+    else:
+        wgs = [gcj02_to_wgs84(p[1], p[0]) for p in pts]      # (lat,lng) WGS-84
+        raw = _osrm_route_all(wgs)
+        if len(raw) >= 2:
+            out = [[round(g[1], 6), round(g[0], 6)]
+                   for g in (wgs84_to_gcj02(x[1], x[0]) for x in raw)]
+        else:
+            out = pts                                              # 直线兜底
+    _PATH_CACHE[key] = out
+    return out

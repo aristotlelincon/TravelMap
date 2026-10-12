@@ -410,6 +410,9 @@ body{font-family:var(--fb);
   border:1px solid var(--line);background:#93A19C;
   box-shadow:0 0 0 4px var(--paper),0 0 0 5px var(--line),0 12px 28px rgba(0,0,0,.12)}
 #cityMapBox.tmap-on{background:#7E8C87}
+/* 漫画简图用纯白背景:SVG 用 preserveAspectRatio=meet 保持比例,letterbox 区域露出容器背景,
+   纯白最干净;市界外区域也裁成透明,直接露出这层白底。 */
+#cityMapBox.cute-on{background:#FFFFFF}
 .mapfloat{position:absolute;left:26px;top:26px;z-index:3;background:rgba(251,250,246,.94);
   border:1px solid var(--line);border-radius:3px;padding:6px 12px;font-size:12px;color:var(--tx);
   box-shadow:var(--sh2);font-weight:600;font-variant-numeric:tabular-nums}
@@ -639,10 +642,10 @@ body{font-family:var(--fb);
         <div id="cityMapBox"></div>
         <div class="mapfloat" id="cityCount" style="display:none"></div>
         <div class="mapctl float" id="cityViewCtl" style="display:none">
-          <div class="chip on" data-v="2d">俯视</div>
           <div class="chip" data-v="rot">转 30°</div>
           <div class="chip on" data-b="sat">卫星</div>
           <div class="chip" data-b="vec">街道</div>
+          <div class="chip" data-b="cute">漫画</div>
         </div>
       </div>
       <div class="pad">
@@ -729,7 +732,6 @@ body{font-family:var(--fb);
              路线,腾出来的位置换成切天数 —— 不用为了看第二天专门退回行程页。 -->
         <div class="mapctl" id="mapDayCtl" style="display:none"></div>
         <div class="mapctl" id="mapCtl" style="display:none">
-          <div class="chip on" data-pitch="0">俯视</div>
           <div class="chip on" data-b="sat">卫星</div>
           <div class="chip" data-b="vec">街道</div>
         </div>
@@ -855,6 +857,9 @@ body{font-family:var(--fb);
 </aside>
 </div>
 
+<!-- 内置行政边界(真实,已从高德落盘抽稀)。放在主脚本前加载;
+     加载不到也只是 window.TM_BOUNDARY 为空,不影响其它功能。 -->
+<script src="data/boundary.js"></script>
 <script>
 /* ---------- 地图底图:腾讯地图 GL JS ----------
  * 默认走 WorkBuddy 的密钥代理(_TMapSecurityConfig),前端不落任何 Key。
@@ -989,7 +994,8 @@ var S={city:'成都',days:3,prefs:[],pace:'适中',plan:null,di:0,live:false,
        wish:[],            // 想去的地方(心愿清单),有后端时由 /api/wish 下发
        stay:null,           // 落脚点 {name,lat,lng,addr} —— S.base 已被底图类型占用,别混用
        // S.base 是底图类型 'sat'/'vec',不是落脚点。名字撞了很难查,两者各自独立。
-       base:'sat',planTs:0,planFresh:false};
+       base:'sat',planTs:0,planFresh:false,
+       cute:true};          // 漫画简图开关。true 时试点城市画手绘简图,非试点城市自动回落真三维
 
 /*
  * 底图类型。
@@ -1618,7 +1624,8 @@ function renderCityGrid(){
     hit.forEach(function(c){g.appendChild(cityCell(c,c.n===S.city))});
     if(!hit.length){
       none.style.display='block';
-      none.innerHTML='没找到「<b>'+kw+'</b>」。<br>'+(S.live?'接了真实数据,可以直接用它':
+      // kw 是用户自己敲进来的,同样是外部文本 —— 兜底 + 转义,两边都不留口子
+      none.innerHTML='没找到「<b>'+esc(kw)+'</b>」。<br>'+(S.live?'接了真实数据,可以直接用它':
         '启动后端后可查任意城市;现在只能用带 <b>·</b> 标记的三个示例城市');
       var b=document.createElement('button');b.className='btn';b.style.marginTop='14px';
       b.textContent='就用「'+kw+'」';b.onclick=function(){pickCityName(kw)};
@@ -1641,6 +1648,7 @@ function pickCityName(v){
   v=(v||'').trim();
   if(!v){toast('先选一个城市');return}
   S.city=v.replace(/市$/,'');     // 高德/腾讯按城市名检索,带"市"也能命中,统一去掉更稳
+  CUTE.view={s:1,tx:0,ty:0};CUTE.pick=null;   // 换了城市,缩放/选中都重置,别把上一张图的视图带过来
   S.pois=[];S.plan=null;S.typeFilter='';S.grpQ='';S.poisTs=0;S.poisFresh=false;
   S.stay=readStay(S.city);        // 落脚点按城市各记一份,换城市要跟着换
   renderStay();
@@ -1650,6 +1658,9 @@ function pickCityName(v){
   hideResume();
   var si=$('citySearch');if(si)si.value='';
   showPage('city');      // 先切页(容器要有尺寸才能初始化地图),再由 loadCityPois 拉数据渲染
+  // 选完就跳去全城页,首页那张网格还留着上一次渲染的卡片 —— 绿框会一直停在旧城市上,
+  // 回首页看着像"没选中"。选中态(.cityc.on)是建卡片那一刻写死的,只能重建。
+  if($('cityGrid'))renderCityGrid();
   loadCityPois();
 }
 
@@ -1898,10 +1909,11 @@ function renderTrip(){
     '<div class="sumc"><div class="k">游玩</div><div class="v">'+Math.floor(play/60)+' 小时</div></div>'+
     '<div class="sumc"><div class="k">结束时间</div><div class="v">'+hhmm(tl.end)+'</div></div>'+
     '<div class="sumc"><div class="k">门票合计</div><div class="v">'+(cost?'¥'+cost:'免费')+'</div></div>'+
-    (day.note?'<div class="daynote">本日思路:'+day.note+'</div>':'')+
+    // day.note / dropped 的 name 都是大模型给的文本,同样不能原样进 innerHTML
+    (day.note?'<div class="daynote">本日思路:'+esc(day.note)+'</div>':'')+
     ((day.dropped&&day.dropped.length)?
       '<div class="daydrop">为保证当天按时结束,已移出 <b>'+
-      day.dropped.map(function(x){return x&&x.name}).filter(Boolean).join('、')+
+      day.dropped.map(function(x){return x&&x.name?esc(x.name):''}).filter(Boolean).join('、')+
       '</b> · 可在下方备选里手动加回</div>':'');
 
   // 行程整体思路(AI 综合考量后的总纲),存在才显示,避免重复插入。
@@ -1918,7 +1930,7 @@ function renderTrip(){
   $('aiTip').innerHTML='<h3><span class="ai">'+(byModel?'AI':'规则')+'</span>看了下你的安排'+
     '<span style="font-size:11px;font-weight:400;color:var(--tx3);margin-left:6px">'+
     (byModel?'大模型生成':'没接后端 · 本地规则')+'</span></h3><ul>'+
-    tips.map(function(s){return '<li>'+s+'</li>'}).join('')+'</ul>';
+    tips.map(function(s){return '<li>'+esc(s)+'</li>'}).join('')+'</ul>';
 
   // 联网检索到了、但地图上核不到具体地点的当下热点。
   // 只当线索列出,不进池、不进行程 —— 真实性没过验证的东西不给它位置。
@@ -1966,7 +1978,7 @@ function renderTrip(){
               : (bn && n.from===bn) ? ('从 '+esc(n.from)+' 出发')
               : ('前往 '+esc(n.to||''));
       var e=document.createElement('div');e.className='move'+(n.home?' home':'');
-      e.innerHTML='<span class="mvt">'+lbl+'</span><span>'+n.mode+' · 约 '+n.min+' 分钟</span><span class="ln"></span>';
+      e.innerHTML='<span class="mvt">'+lbl+'</span><span>'+esc(n.mode)+' · 约 '+n.min+' 分钟</span><span class="ln"></span>';
       box.appendChild(e);return;
     }
     if(n.kind==='meal'){
@@ -1985,15 +1997,18 @@ function renderTrip(){
     // 收藏标要放在第一个:一眼能看到,不用在标签堆里找
     var wishTag=wsh?'<span class="tg wish">你收藏过</span>':'';
     var c=document.createElement('div');c.className='node'+(wsh?' wished':'');
-    c.innerHTML='<div class="dot">'+idx+'</div><div class="stamp">'+hhmm(n.arrive)+' – '+hhmm(n.leave)+' · 停留 '+dur(n.poi.duration)+(bt?' · '+bt:'')+'</div>'+
-      '<div class="card"><div class="hd"><div class="nm">'+n.poi.name+'</div><div class="sc">'+n.poi.rating.toFixed(1)+'</div></div>'+
-      '<div class="meta">'+wishTag+'<span class="tg">'+n.poi.type+'</span><span class="tg">'+(n.poi.cost?'人均 ¥'+n.poi.cost:'免费')+'</span>'+
-      n.poi.tags.slice(0,2).map(function(x){return '<span class="tg">'+x+'</span>'}).join('')+
+    /* 名字/类型/标签/亮点/理由全是外部来的:名字和类型来自高德 POI,
+     * highlight 和 why 是大模型写的。任何一个原样拼进 innerHTML 就是一个注入口,
+     * 这里统一过一遍 esc()。 */
+    c.innerHTML='<div class="dot">'+idx+'</div><div class="stamp">'+hhmm(n.arrive)+' – '+hhmm(n.leave)+' · 停留 '+dur(n.poi.duration)+(bt?' · '+esc(bt):'')+'</div>'+
+      '<div class="card"><div class="hd"><div class="nm">'+esc(n.poi.name)+'</div><div class="sc">'+Number(n.poi.rating||0).toFixed(1)+'</div></div>'+
+      '<div class="meta">'+wishTag+'<span class="tg">'+esc(n.poi.type)+'</span><span class="tg">'+(n.poi.cost?'人均 ¥'+Number(n.poi.cost):'免费')+'</span>'+
+      n.poi.tags.slice(0,2).map(function(x){return '<span class="tg">'+esc(x)+'</span>'}).join('')+
       (n.poi.indoor?'<span class="tg">室内</span>':'')+
-      hotTag+(bt?'<span class="tg hl">'+bt+'</span>':'')+'</div>'+
-      (hl?'<div class="hl">'+hl+'</div>':'')+
+      hotTag+(bt?'<span class="tg hl">'+esc(bt)+'</span>':'')+'</div>'+
+      (hl?'<div class="hl">'+esc(hl)+'</div>':'')+
       hotWhy+
-      (n.why?'<div class="why">为何这样排:'+n.why+'</div>':'')+
+      (n.why?'<div class="why">为何这样排:'+esc(n.why)+'</div>':'')+
       '<div class="ops"><div class="op" data-a="swap">换一个</div><div class="op del" data-a="del">删除</div></div></div>';
     var order=idx-1;
     c.querySelectorAll('.op').forEach(function(b){
@@ -2045,7 +2060,9 @@ function loadTMapNow(cb){
   var url='https://map.qq.com/api/gljs?v=1.exp'+(TMAP_KEY?'&key='+encodeURIComponent(TMAP_KEY):'');
   var s=document.createElement('script');
   s.src=url;s.charset='utf-8';
+  var _to=null;
   function settle(ok){
+    if(_to){clearTimeout(_to);_to=null;}
     MAP.loading=false;
     cb(ok);
     var ps=MAP.pending;MAP.pending=[];
@@ -2059,6 +2076,14 @@ function loadTMapNow(cb){
     mapLog('SDK 脚本下载失败(网络问题或被拦截)');
     MAP.failed=true;settle(false);
   };
+  /* 沙箱/无网络环境下,脚本请求可能既不 onload 也不 onerror(直接挂起)。
+     不兜底的话地图框会永远空白、连示意图都不画。给个超时,到点走失败分支。 */
+  _to=setTimeout(function(){
+    if(MAP.loading){
+      mapLog('SDK 下载超时(9s),走兜底');
+      MAP.failed=true;settle(false);
+    }
+  },9000);
   document.head.appendChild(s);
 }
 
@@ -2157,7 +2182,7 @@ function renderSchematic(items,box){
        '<text x="'+x+'" y="'+(y+3.5)+'" text-anchor="middle" font-size="10" fill="#fff" font-weight="500">'+(ix+1)+'</text>';
     var lb=p.name.length>7?p.name.slice(0,6)+'…':p.name;
     var tx=Math.min(Math.max(x,W*0.16),W*0.84);
-    g+='<text x="'+tx+'" y="'+(y+25)+'" text-anchor="middle" font-size="10.5" fill="#4A4E48">'+lb+'</text>';
+    g+='<text x="'+tx+'" y="'+(y+25)+'" text-anchor="middle" font-size="10.5" fill="#4A4E48">'+esc(lb)+'</text>';
   });
   $(box).innerHTML='<svg class="mapsvg" viewBox="0 0 '+W+' '+H+'">'+g+'</svg>';
 }
@@ -2176,7 +2201,7 @@ function showMapHint(){
 
 function destroyMap(){
   try{if(MAP.map)MAP.map.destroy()}catch(e){}
-  MAP={map:null,marker:null,city:null,line:null,label:null,info:null,ready:false,loading:false,failed:MAP.failed,pending:[]};
+  MAP={map:null,marker:null,city:null,line:null,label:null,info:null,ready:false,loading:false,failed:MAP.failed,pending:[],eng:null,_markers:[],_popup:null,boundary:null,gen:MAP.gen||0};
 }
 
 /* 切城市时把全城地图实例整个销毁重建,旧城市的标记/视角不留痕 */
@@ -2195,8 +2220,8 @@ function renderMapList(items){
     var e=document.createElement('div');e.className='card';e.style.marginBottom='8px';
     e.innerHTML='<div class="hd"><div class="nm">'+
       '<span style="color:var(--brand);font-weight:500">'+(ix+1)+'&nbsp;&nbsp;</span>'+
-      p.name+'</div><div class="sc">'+Number(p.rating).toFixed(1)+'</div></div>'+
-      '<div class="meta"><span class="tg">'+p.type+'</span>'+
+      esc(p.name)+'</div><div class="sc">'+Number(p.rating||0).toFixed(1)+'</div></div>'+
+      '<div class="meta"><span class="tg">'+esc(p.type)+'</span>'+
       '<span class="tg">停留 '+dur(p.duration)+'</span>'+
       '<span class="tg">'+(p.cost?'¥'+p.cost:'免费')+'</span>'+
       (p.indoor?'<span class="tg">室内</span>':'')+'</div>';
@@ -2217,20 +2242,233 @@ function renderMap(){
   $('mapTitle').textContent='第 '+day.day+' 天路线';
   renderMapDayCtl();
   renderMapList(items);
-  if(!items.length){$('mapBox').innerHTML='';return}
-  loadTMap(function(ok){
-    if(!ok){destroyMap();showMapHint();renderSchematic(items);return}
-    try{
-      if(MAP.ready)buildLayers(items); else initMap3D(items);
-      $('mapSub').textContent=S.base==='sat'
-        ? '卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称';
-      $('mapHint').textContent='';
-      $('mapCtl').style.display='flex';
-      $('mapDayCtl').style.display=(S.plan.days.length>1)?'flex':'none';
-    }catch(e){
-      mapLog('地图初始化抛错:'+e.message);
-      destroyMap();showMapHint();renderSchematic(items);
+  $('mapDayCtl').style.display=(S.plan.days.length>1)?'flex':'none';
+  if(!items.length){
+    destroyMap();$('mapBox').innerHTML='';
+    $('mapCtl').style.display='none';
+    $('mapSub').textContent='当天没有安排景点';
+    $('mapHint').textContent='';
+    return;
+  }
+  /* 先清掉上一次残留的真实底图实例(腾讯或 MapLibre),避免它的 DOM 被新实例覆盖后,
+     异步加载成功时复用到一个已脱离文档的实例上而报错。 */
+  destroyMap();
+  /* 行程路线优先用真实底图:和全城地图同款的 MapLibre 真三维(本地 vendor,离线可用)优先,
+     其次腾讯平面卫星,两者都失败才退卡通兜底 —— 绝不空白,但默认就是真实地图而非卡通。
+     路线画在**全城底图**之上:编号图钉按行程顺序 + 顺次连线 + 方向箭头,整座城市可见。 */
+  var gen=(MAP.gen=(MAP.gen||0)+1);
+  loadBoundary(S.city, function(geo){
+    if(MAP.gen!==gen)return;                 // 用户已切城/切天,丢弃过期结果
+    CUTE_GEO[S.city]=geo;
+    renderRouteReal(items, geo, day.day, gen);
+  });
+}
+
+/* 路线页真实底图:MapLibre 真三维 → 腾讯平面 → 卡通兜底。done(realOk) 告知是否成功用上真实底图 */
+function renderRouteReal(items, geo, dayIdx, gen){
+  loadMapLibre(function(mlOk){
+    if(MAP.gen!==gen)return;
+    if(mlOk){
+      try{
+        initMapML(items, geo, gen);
+        $('mapSub').textContent=S.base==='sat'?'卫星实景 · 按行程顺序连线':'街道 · 按行程顺序连线';
+        $('mapHint').textContent='';
+        $('mapCtl').style.display='flex';
+        syncMapCtl();
+        return;
+      }catch(e){ mapLog('MapLibre 路线初始化抛错:'+e.message); }
     }
+    loadTMap(function(ok){
+      if(MAP.gen!==gen)return;
+      if(ok){
+        try{
+          if(MAP.ready)buildLayers(items); else initMap3D(items);
+          $('mapSub').textContent=S.base==='sat'
+            ? '卫星实景 · 按行程顺序连线':'街道 · 按行程顺序连线';
+          $('mapHint').textContent='';
+          $('mapCtl').style.display='flex';
+          syncMapCtl();
+          return;
+        }catch(e){ mapLog('TMap 路线初始化抛错:'+e.message); }
+      }
+      // 两种真实底图都失败:卡通兜底,绝不空白
+      renderCuteRoute(items, geo, dayIdx);
+      $('mapSub').textContent='漫画路线 · 真实城市轮廓 · 按行程顺序连线';
+      $('mapHint').textContent='';
+      $('mapCtl').style.display='none';
+    });
+  });
+}
+
+/* 行程路线的 MapLibre 渲染:复用全城地图同款地形样式(卫星/街道+地形+市界遮罩),
+ * 在上面叠加「编号图钉(按行程顺序)+ 顺次连线 + 方向箭头」,视野框住整座城市。 */
+function initMapML(items, geo, gen){
+  mapLog('创建路线 MapLibre 真三维地形,底图='+S.base+',点位 '+items.length);
+  try{if(MAP.map)MAP.map.destroy()}catch(e){}
+  var box=$('mapBox'); if(box)box.innerHTML='';   // 清掉上一座城市/兜底残留,避免透明透出旧地图
+  var bbox=boundaryBbox(geo);
+  var c=items[0],cc=gcj02ToWgs84(c.lat,c.lng);
+  MAP.eng='ml'; MAP._markers=[]; MAP.boundary=geo; MAP.ready=true;
+  $('mapBox').classList.remove('tmap-on');
+  MAP.map=new maplibregl.Map({
+    container:'mapBox',
+    style:terrainStyle(geo),
+    center:bbox?[(bbox[0][0]+bbox[1][0])/2,(bbox[0][1]+bbox[1][1])/2]:[cc.lng,cc.lat],
+    zoom:bbox?9:11,
+    pitch:0, bearing:0,      // 默认垂直俯视,一目了然看到城市块形状
+    attributionControl:false, antialias:true
+  });
+  MAP.map.on('error',function(e){mapLog('MapLibre 路线错误:'+((e&&e.error&&e.error.message)||e&&e.message||''))});
+  MAP.map.on('load',function(){
+    if(MAP.gen!==gen)return;
+    try{ if(geo)MAP.map.setTerrain({source:'dem',exaggeration:TERRAIN_EXAG}) }catch(e){ mapLog('setTerrain 失败:'+e.message); }
+    try{setRouteBase(S.base)}catch(e){}
+    addRouteMarkers(items);
+    addRouteLine(items);
+    fitRoute(items,geo);
+  });
+}
+function routePinSvg(n){
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">'+
+    '<path d="M15 37C15 37 28 23 28 14C28 7 22 2 15 2C8 2 2 7 2 14C2 23 15 37 15 37Z" fill="#0F7A57" stroke="#fff" stroke-width="2"/>'+
+    '<circle cx="15" cy="14" r="10.5" fill="#fff"/>'+
+    '<text x="15" y="18.6" text-anchor="middle" font-size="13" font-weight="700" fill="#0F7A57" font-family="sans-serif">'+n+'</text></svg>';
+}
+function routePinEl(n){
+  var el=document.createElement('div');
+  el.innerHTML=routePinSvg(n);
+  el.style.cssText='cursor:pointer;width:30px;height:38px';
+  return el;
+}
+function addRouteMarkers(items){
+  if(!MAP.map)return;
+  if(MAP._markers)MAP._markers.forEach(function(m){try{m.remove()}catch(e){}});
+  MAP._markers=[];
+  MAP._popup=MAP._popup||new maplibregl.Popup({offset:16,closeButton:false,closeOnClick:true});
+  items.forEach(function(p,ix){
+    var w=gcj02ToWgs84(p.lat,p.lng);
+    var el=routePinEl(ix+1);
+    var mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([w.lng,w.lat]).addTo(MAP.map);
+    mk._gcj=[p.lng,p.lat]; mk._wgs=[w.lng,w.lat];   // 高德 GCJ-02(街道) / WGS-84(卫星)双坐标
+    el.addEventListener('click',function(ev){ev.stopPropagation();
+      MAP._popup.setLngLat(mk.getLngLat()).setHTML(
+        '<div style="padding:5px 8px;font-size:12.5px;line-height:1.5">'+
+        '<b>'+(ix+1)+'. '+p.name+'</b><br><span style="color:#676B65">'+p.type+' · '+
+        Number(p.rating||0).toFixed(1)+' 分 · '+(p.cost?'人均 ¥'+p.cost:'免费')+'</span></div>')
+        .addTo(MAP.map);
+    });
+    MAP._markers.push(mk);
+  });
+  setRouteMarkerFrame(S.base==='sat'?'wgs':'gcj'); // 按当前底图坐标系校正标记位置
+}
+function setRouteMarkerFrame(frame){
+  if(!MAP._markers)return;
+  MAP._markers.forEach(function(mk){
+    var c=frame==='gcj'?mk._gcj:mk._wgs;
+    if(c)try{mk.setLngLat(c)}catch(e){}
+  });
+}
+/* 路线页 MapLibre 底图切换(卫星/街道),作用域是 MAP.map 而非全城 CMAP */
+function setRouteBase(b){
+  if(!MAP.map)return;
+  try{
+    if(MAP.map.getLayer('sat')){
+      MAP.map.setLayoutProperty('sat','visibility','visible');
+      MAP.map.setPaintProperty('sat','raster-opacity',b==='sat'?1:0.25);
+    }
+    if(MAP.map.getLayer('street')){
+      MAP.map.setLayoutProperty('street','visibility',b==='sat'?'none':'visible');
+    }
+    if(MAP.map.getLayer('traffic')){
+      MAP.map.setLayoutProperty('traffic','visibility',b==='sat'?'none':'visible');
+    }
+    if(MAP.map.getLayer('hill')){
+      MAP.map.setPaintProperty('hill','hillshade-exaggeration',b==='sat'?0.55:0.3);
+    }
+    setRouteMarkerFrame(b==='sat'?'wgs':'gcj');
+  }catch(e){}
+}
+function addArrowIcon(map){
+  if(!map||!map.addImage||(map.hasImage&&map.hasImage('rarr')))return;
+  try{
+    var c=document.createElement('canvas');c.width=20;c.height=20;
+    var x=c.getContext('2d');
+    x.strokeStyle='#0F7A57';x.lineWidth=3.2;x.lineCap='round';x.lineJoin='round';
+    x.beginPath();x.moveTo(4,5);x.lineTo(15,10);x.lineTo(4,15);x.stroke();
+    map.addImage('rarr',c);
+  }catch(e){}
+}
+function addRouteLine(items){
+  if(!MAP.map||!items||!items.length)return;
+  var gen=MAP.gen;
+  function drawWgs(coords, real){
+    if(MAP.gen!==gen||!MAP.map)return;
+    var fc={type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords}}]};
+    if(MAP.map.getSource('route')){ try{MAP.map.getSource('route').setData(fc)}catch(e){} }
+    else { try{MAP.map.addSource('route',{type:'geojson',data:fc})}catch(e){} }
+    if(!MAP.map.getLayer('route-casing')){
+      try{MAP.map.addLayer({id:'route-casing',type:'line',source:'route',
+        layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#ffffff','line-width':9}})}catch(e){}
+    }
+    if(!MAP.map.getLayer('route-line')){
+      try{MAP.map.addLayer({id:'route-line',type:'line',source:'route',
+        layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#0F7A57','line-width':5}})}catch(e){}
+    }
+    addArrowIcon(MAP.map);
+    if(!MAP.map.getLayer('route-arrow')){
+      try{MAP.map.addLayer({id:'route-arrow',type:'symbol',source:'route',
+        layout:{'symbol-placement':'line','icon-image':'rarr','icon-size':0.9,
+                'icon-allow-overlap':true,'icon-rotation-alignment':'map'}})}catch(e){}
+    }
+    $('mapSub').textContent = real
+      ? '导航路线 · 沿真实道路连线' : '直线示意 · 未取到道路数据(需后端路由服务)';
+  }
+  /* 先画直线占位:保证任何情况下路线页都不白屏,真实道路回来后再覆盖。 */
+  var straight=items.map(function(p){var w=gcj02ToWgs84(p.lat,p.lng);return [w.lng,w.lat];});
+  drawWgs(straight, false);
+  /* 后端不可用(没重启/无后端/404)时,前端直连 OSRM 公共路由(免 key,需外网)兜底,
+     返回的就是 WGS-84,直接画(和景点 GCJ→WGS 后同坐标系)。OSRM 在国内可能被墙,
+     失败则静默保持直线兜底,绝不空白。 */
+  function tryOsrmDirect(){
+    if(MAP.gen!==gen||!MAP.map)return;
+    var wgs=items.map(function(p){var w=gcj02ToWgs84(p.lat,p.lng);return [w.lng,w.lat];});
+    var coords=wgs.map(function(c){return c[0].toFixed(6)+','+c[1].toFixed(6);}).join(';');
+    fetch('https://router.project-osrm.org/route/v1/foot/'+coords+'?overview=full&geometries=geojson')
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(MAP.gen!==gen||!MAP.map)return;
+        var co=(d&&d.routes&&d.routes[0]&&d.routes[0].geometry&&d.routes[0].geometry.coordinates)||[];
+        if(co.length>=2) drawWgs(co.map(function(x){return [x[0],x[1]];}), true);
+      })
+      .catch(function(){});
+  }
+  /* 异步向 /api/route 请求沿真实道路的折线(后端:高德步行优先,无 Key 回退 OSRM 公共服务)。 */
+  var city=(S.city||'').trim();
+  var seq=items.map(function(p){return Number(p.lng).toFixed(6)+','+Number(p.lat).toFixed(6);}).join(';');
+  fetch('/api/route?city='+encodeURIComponent(city)+'&pts='+encodeURIComponent(seq))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(MAP.gen!==gen||!MAP.map)return;
+      if(d&&d.ok&&d.path&&d.path.length>=2){
+        var co=d.path.map(function(pt){var w=gcj02ToWgs84(pt[1],pt[0]);return [w.lng,w.lat];});
+        drawWgs(co, true);
+      }
+      /* d.ok===false 表示后端已尝试过(多半无外网),不再直连,保持直线兜底 */
+    })
+    .catch(function(){ tryOsrmDirect(); });   // 无后端/未重启:前端直连 OSRM 兜底
+}
+function fitRoute(items,geo){
+  if(!MAP.map)return;
+  var bbox=boundaryBbox(geo);
+  if(bbox){ MAP.map.fitBounds(bbox,{padding:50,maxZoom:11}); return; } // 全城视角:路线画在整座城市上
+  var b=new maplibregl.LngLatBounds();
+  items.forEach(function(p){var w=gcj02ToWgs84(p.lat,p.lng);b.extend([w.lng,w.lat]);});
+  MAP.map.fitBounds(b,{padding:70,maxZoom:13});
+}
+function syncMapCtl(){
+  var ctl=$('mapCtl');if(!ctl)return;
+  ctl.querySelectorAll('.chip[data-b]').forEach(function(x){
+    x.classList.toggle('on', x.getAttribute('data-b')===S.base);
   });
 }
 
@@ -2245,35 +2483,89 @@ var TCOLOR={'历史古迹':'#8B5E3C','博物馆':'#6E5BA8','宗教建筑':'#B07C
   '城市公园':'#4A9E5C','主题乐园':'#D2691E','动物园':'#C98A00','历史文化街区':'#A0522D',
   '美食街区':'#C1443B','商圈':'#3F7CAC','文创园区':'#7A6BA8','乡村休闲':'#5C8A4A'};
 var TPAL=['#0F7A57','#3F7CAC','#8B5E3C','#6E5BA8','#C1443B','#C98A00','#2E8B57','#A0522D'];
+/* 图钉里画的是这一类的剪影,不是抽象几何形 —— 方形/三角/六边形和"博物馆""商圈"
+ * 之间没有语义联系,看图标根本猜不出是什么。下面是每类一眼能认的东西:
+ *   museum 柱廊 / mountain 山 / pagoda 塔 / bag 购物袋 / bowl 碗筷
+ *   balloon 气球 / paw 爪印 / note 音符 / dot 圆点(兜底)
+ * 剪影统一画在以原点为中心、约 -1..1 的方格内,再整体缩放到图钉头部。 */
+var TGLYPH={
+  museum:'<path d="M-0.95 -0.12L0 -0.72L0.95 -0.12Z"/>'+
+         '<path d="M-0.72 -0.12H-0.3V0.62H-0.72Z"/><path d="M-0.22 -0.12H0.22V0.62H-0.22Z"/>'+
+         '<path d="M0.3 -0.12H0.72V0.62H0.3Z"/><path d="M-0.85 0.62H0.85V0.82H-0.85Z"/>',
+  mountain:'<path d="M-1 0.72L-0.38 -0.62L0.02 -0.02L0.44 -0.5L1 0.72Z"/>',
+  pagoda:'<path d="M-0.05 -0.95H0.05V-0.68H-0.05Z"/>'+
+         '<path d="M-0.4 -0.68L0.4 -0.68L0.24 -0.42L-0.24 -0.42Z"/>'+
+         '<path d="M-0.66 -0.28L0.66 -0.28L0.45 -0.02L-0.45 -0.02Z"/>'+
+         '<path d="M-0.3 -0.02H0.3V0.78H-0.3Z"/>',
+  bag:'<path d="M-0.66 -0.22H0.66L0.56 0.8H-0.56Z"/>'+
+      '<path d="M-0.32 -0.22C-0.32 -0.78 0.32 -0.78 0.32 -0.22" fill="none" stroke="#fff" stroke-width="0.16"/>',
+  bowl:'<path d="M-0.78 -0.08H0.78C0.78 0.62 0.42 0.82 0 0.82C-0.42 0.82 -0.78 0.62 -0.78 -0.08Z"/>'+
+       '<path d="M0.12 -0.86L0.62 -0.3" fill="none" stroke="#fff" stroke-width="0.15"/>'+
+       '<path d="M0.38 -0.92L0.8 -0.44" fill="none" stroke="#fff" stroke-width="0.15"/>',
+  balloon:'<circle cx="0" cy="-0.32" r="0.5"/><path d="M-0.1 0.14H0.1L0 0.32Z"/>'+
+          '<path d="M0 0.32C0.16 0.56 -0.16 0.66 0 0.92" fill="none" stroke="#fff" stroke-width="0.14"/>',
+  paw:'<ellipse cx="0" cy="0.38" rx="0.46" ry="0.32"/>'+
+      '<circle cx="-0.52" cy="-0.16" r="0.17"/><circle cx="-0.19" cy="-0.46" r="0.18"/>'+
+      '<circle cx="0.19" cy="-0.46" r="0.18"/><circle cx="0.52" cy="-0.16" r="0.17"/>',
+  note:'<ellipse cx="-0.28" cy="0.52" rx="0.34" ry="0.25"/>'+
+       '<path d="M0.06 0.52V-0.62" fill="none" stroke="#fff" stroke-width="0.17"/>'+
+       '<path d="M0.06 -0.62C0.5 -0.5 0.62 -0.22 0.36 -0.02" fill="none" stroke="#fff" stroke-width="0.15"/>',
+  dot:'<circle cx="0" cy="0" r="0.32"/>'
+};
+/* 类型 → 图标名。和 TCOLOR 同一批键,逐个对得上。 */
+var TSHAPE={'历史古迹':'pagoda','博物馆':'museum','宗教建筑':'pagoda','自然风光':'mountain',
+  '城市公园':'mountain','主题乐园':'balloon','动物园':'paw','历史文化街区':'pagoda',
+  '美食街区':'bowl','商圈':'bag','文创园区':'note','乡村休闲':'mountain'};
 /* 高德真实返回的细分类型很杂(文物古迹 / 公园 / 商业街 / 风景名胜…),
- * 逐个配色不现实。按关键词归类,保证同一类始终一个颜色。 */
+ * 逐个配色不现实。按关键词归类,保证同一类始终一个颜色。
+ * 第三项是图标名,和归类共用一套判定,避免两套规则各走各的。 */
 var TRULE=[
-  ['博物馆|美术馆|科技馆|图书馆|纪念馆|展览馆|艺术馆|科教','#6E5BA8'],
-  ['公园|植物园|海滨|湿地|山|河|湖|岛屿|自然|风景|景点|景区','#2E8B57'],
-  ['古迹|遗址|寺庙|教堂|宗教|祠|塔|陵园|纪念碑','#8B5E3C'],
-  ['商圈|商业街|购物|市场|步行街','#3F7CAC'],
-  ['餐饮|美食|小吃|餐厅|食品','#C1443B'],
-  ['游乐园|乐园|度假|温泉|滑雪|主题','#D2691E'],
-  ['动物|海洋|水族|动物园','#C98A00'],
-  ['文创|剧院|演出|影院|文化','#7A6BA8'],
-  ['住宅|商务|公司|酒店|写字楼','#9DA09A']
+  ['博物馆|美术馆|科技馆|图书馆|纪念馆|展览馆|艺术馆|科教','#6E5BA8','museum'],
+  ['公园|植物园|海滨|湿地|山|河|湖|岛屿|自然|风景|景点|景区','#2E8B57','mountain'],
+  ['古迹|遗址|寺庙|教堂|宗教|祠|塔|陵园|纪念碑','#8B5E3C','pagoda'],
+  ['商圈|商业街|购物|市场|步行街','#3F7CAC','bag'],
+  ['餐饮|美食|小吃|餐厅|食品','#C1443B','bowl'],
+  ['游乐园|乐园|度假|温泉|滑雪|主题','#D2691E','balloon'],
+  ['动物|海洋|水族|动物园','#C98A00','paw'],
+  ['文创|剧院|演出|影院|文化','#7A6BA8','note'],
+  ['住宅|商务|公司|酒店|写字楼','#9DA09A','dot']
 ];
-function tcolor(t){
-  if(TCOLOR[t])return TCOLOR[t];
-  for(var i=0;i<TRULE.length;i++){
-    var ks=TRULE[i][0].split('|'),j;
-    for(j=0;j<ks.length;j++)if(t.indexOf(ks[j])>=0)return TRULE[i][1];
+/* 配色和外形都从这一处出,两边引擎共用 */
+function tstyle(t){
+  if(TCOLOR[t])return {c:TCOLOR[t],s:TSHAPE[t]||'circle'};
+  var i,j,ks;
+  for(i=0;i<TRULE.length;i++){
+    ks=TRULE[i][0].split('|');
+    for(j=0;j<ks.length;j++)if(t.indexOf(ks[j])>=0)
+      return {c:TRULE[i][1],s:TRULE[i][2]||'circle'};
   }
   var h=0;for(var k=0;k<t.length;k++)h=(h*31+t.charCodeAt(k))>>>0;
-  return TPAL[h%TPAL.length];
+  return {c:TPAL[h%TPAL.length],s:'circle'};
 }
-function poiIcon(color,big){
-  var W=big?30:24,H=big?38:31,r=big?5:3.6;
-  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 24 31">'+
-    '<path d="M12 30C12 30 21.5 19 21.5 12C21.5 6 17.3 1 12 1C6.7 1 2.5 6 2.5 12C2.5 19 12 30 12 30Z" '+
-    'fill="'+color+'" stroke="#fff" stroke-width="2"/>'+
-    '<circle cx="12" cy="12" r="'+r+'" fill="#fff"/></svg>';
-  return 'data:image/svg+xml,'+encodeURIComponent(svg);
+function tcolor(t){return tstyle(t).c}
+function tshape(t){return tstyle(t).s}
+/* 把剪影塞进图钉头部:以 (cx,cy) 为中心,按 r 缩放到合适大小。
+ * 剪影统一用白色,压在彩色的圆头上;线条类的(bag/bowl/balloon/note 的提手、筷子、绳子)
+ * 自带 stroke,其余是实心色块。 */
+function pinGlyph(shape,cx,cy,r){
+  var g=TGLYPH[shape]||TGLYPH.dot;
+  var s=(r*0.62).toFixed(3);
+  return '<g transform="translate('+cx+','+cy+') scale('+s+')" fill="#fff">'+g+'</g>';
+}
+/* 图钉:尾巴在下、圆头在上,尾部先画所以接缝被头部盖住。
+ * 头部始终是圆 —— 换的是里面的剪影,锚点和视觉重量才稳定。 */
+function pinSvg(color,vbW,vbH,cx,cy,r,tipY,shape,W,H){
+  var tail='M'+cx+' '+tipY+'L'+(cx-r*0.62).toFixed(2)+' '+(cy+r*0.52).toFixed(2)+
+           'L'+(cx+r*0.62).toFixed(2)+' '+(cy+r*0.52).toFixed(2)+'Z';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+(W||vbW)+'" height="'+(H||vbH)+
+    '" viewBox="0 0 '+vbW+' '+vbH+'">'+
+    '<path d="'+tail+'" fill="'+color+'" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>'+
+    '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+color+'" stroke="#fff" stroke-width="2"/>'+
+    pinGlyph(shape,cx,cy,r)+'</svg>';
+}
+function poiIcon(color,big,shape){
+  var W=big?30:24,H=big?38:31;
+  return 'data:image/svg+xml,'+encodeURIComponent(pinSvg(color,24,31,12,12,9.5,30.5,shape,W,H));
 }
 
 /* ---------- 本地缓存 ----------
@@ -2423,8 +2715,28 @@ function renderCity(){
   $('cityMapSub').innerHTML=(items.length?('全城 '+items.length+' 个景点 · '+(S.base==='sat'?'卫星实景':'交通图')):'暂无这座城的数据')+
     ' · <span style="color:var(--brand);cursor:pointer" onclick="go(\'home\')">换城市</span>';
   renderCityList(items);
+  /* chip 的显隐不依赖地图实例:非试点城市要藏起「漫画」,真三维加载失败时也要同步,
+     所以放在这里而不是 afterCityMap(那条路径在 fallback 时根本走不到)。 */
+  syncCityCtl();
   if(!items.length){renderCityEmpty();return}
+  /* 漫画简图:一个字都不碰地图 SDK,整张图自己画。西安试点中。 */
+  if(cuteOn()){
+    if(CUTE.pick){var _h=false;items.forEach(function(p){if(p.id===CUTE.pick)_h=true});if(!_h)CUTE.pick=null}
+    destroyCityMap();          // 上一个模式(真三维/腾讯)的实例不留,否则切回来是旧城市的图
+    $('cityMapBox').classList.remove('tmap-on');
+    $('cityMapBox').classList.add('cute-on');
+    CMAP.eng='cute';
+    var _g=CUTE_GEO[S.city],_c0=S.city;
+    if(_g!==undefined){renderCuteMap(items,_g);afterCityMap(items);return}
+    loadBoundary(S.city,function(geo){
+      if(S.city!==_c0||!cuteOn())return;    // 边界回来时用户可能已经换城或切回真三维了
+      CUTE_GEO[S.city]=geo||null;
+      renderCuteMap(items,geo);afterCityMap(items);
+    });
+    return;
+  }
   // 优先:MapLibre 真三维地形(山凸起/沟凹陷);失败回退腾讯平面卫星;再失败手绘示意图
+  $('cityMapBox').classList.remove('cute-on');
   function fallbackTMap(){
     loadTMap(function(ok){
       if(!ok){cityMapFallback(items);return}
@@ -2475,10 +2787,11 @@ function initCityMap(items){
 function buildCityLayers(items){
   var styles={},geos=[],i;
   for(i=0;i<items.length;i++){
-    var p=items[i],col='#0F7A57';
-    if(!inPlan(p))col=tcolor(p.type);      // 排进行程的一律用品牌绿,其余按类型上色
-    var sid='s'+col.slice(1);
-    if(!styles[sid])styles[sid]=new TMap.MarkerStyle({width:24,height:31,anchor:{x:12,y:31},src:poiIcon(col,false)});
+    var p=items[i],col='#0F7A57',shp='circle';
+    // 排进行程的一律用品牌绿 + 圆形,其余按类型上色也换外形
+    if(!inPlan(p)){col=tcolor(p.type);shp=tshape(p.type);}
+    var sid='s'+col.slice(1)+shp;      // 同色不同形要各建一份样式,否则会串
+    if(!styles[sid])styles[sid]=new TMap.MarkerStyle({width:24,height:31,anchor:{x:12,y:31},src:poiIcon(col,false,shp)});
     geos.push({id:'p'+i,styleId:sid,position:new TMap.LatLng(p.lat,p.lng),
       properties:{name:p.name,type:p.type,rating:p.rating,cost:p.cost,duration:p.duration,id:p.id}});
   }
@@ -2534,20 +2847,69 @@ function gcj02ToWgs84(lat,lng){
   dLng=(dLng*180)/((a/sq)*Math.cos(radLat)*pi);
   return {lat:lat-dLat,lng:lng-dLng};
 }
+/* 内置边界解码:data/boundary.js 里每个环是扁平的 "lng,lat,lng,lat,..." 字符串,
+ * 还原成下游一直在用的 MultiPolygon Feature,其它代码一行都不用改。 */
+function bmDecode(e){
+  var polys=[];
+  (e.r||[]).forEach(function(s){
+    var a=String(s).split(','),pts=[];
+    for(var i=0;i+1<a.length;i+=2){
+      var x=parseFloat(a[i]),y=parseFloat(a[i+1]);
+      if(isFinite(x)&&isFinite(y))pts.push([x,y]);
+    }
+    if(pts.length>=4)polys.push([pts]);
+  });
+  if(!polys.length)return null;
+  return {type:'Feature',properties:{name:e.n||''},geometry:{type:'MultiPolygon',coordinates:polys}};
+}
+/* 内置边界查表:城市名可能带"市"也可能不带,三种写法都试一遍。 */
+function bmFind(city){
+  var B=window.TM_BOUNDARY;
+  if(!B||!city)return null;
+  var c=String(city).trim();
+  var cand=[c, c.replace(/市$/,'') , c+'市'];
+  for(var i=0;i<cand.length;i++){
+    if(B[cand[i]]){ var g=bmDecode(B[cand[i]]); if(g)return g; }
+  }
+  return null;
+}
 /* 加载城市行政边界 GeoJSON(后端缓存 30 天)。
- * 失败也不阻塞,地图会退化成完整世界底图。 */
+ * 失败也不阻塞,地图会退化成完整世界底图。
+ *
+ * 取数顺序:**内置静态数据 > localStorage > 后端 API**。
+ * 内置那份是随项目一起落盘的真实市界(web/data/boundary.js),
+ * 后端没起、浏览器又从没缓存过时,它是唯一能画出真实轮廓的来源 ——
+ * 之前只认"后端在线或 localStorage 有货"两条路,结果没后端就只能画示意轮廓。 */
 function loadBoundary(city,cb){
-  if(!API||API.indexOf('http')!==0){cb(null);return}
   // v2:修复了高德 district 把"西安"误匹配成吉林"西安区"的 bug,旧缓存一律失效
   var key='tm_boundary_v2_'+city;
-  try{ var hit=localStorage.getItem(key); if(hit){ cb(JSON.parse(hit)); return; } }catch(e){}
-  fetch(API+'/api/boundary?city='+encodeURIComponent(city),{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():null})
-    .then(function(d){
-      var geo=d&&d.boundary?d.boundary:null;
-      if(geo){ try{localStorage.setItem(key,JSON.stringify(geo))}catch(e){} }
-      cb(geo);
-    }).catch(function(){cb(null)});
+  function fromLS(){ try{var h=localStorage.getItem(key);return h?JSON.parse(h):null}catch(e){return null} }
+  function fromAPI(){
+    if(!API||API.indexOf('http')!==0){cb(null);return}
+    fetch(API+'/api/boundary?city='+encodeURIComponent(city),{cache:'no-store'})
+      .then(function(r){return r.ok?r.json():null})
+      .then(function(d){
+        var geo=d&&d.boundary?d.boundary:null;
+        if(geo){ try{localStorage.setItem(key,JSON.stringify(geo))}catch(e){} }
+        cb(geo);
+      }).catch(function(){cb(null)});
+  }
+  var g=bmFind(city);
+  if(g){ cb(g); return; }
+  g=fromLS(); if(g){ cb(g); return; }
+  if(!API||API.indexOf('http')!==0){cb(null);return}
+  if(window.TM_BOUNDARY===undefined){
+    /* <script src> 会被 WorkBuddy 内置预览的 CSP 拦掉(当年 MapLibre 同一个坑):
+       改用 fetch 把数据拉回来,做成内联 <script> 注入,再试一次内置。 */
+    fetch(API+'/data/boundary.js').then(function(r){return r.ok?r.text():null}).then(function(t){
+      if(t){ var s=document.createElement('script'); s.textContent=t; document.head.appendChild(s); }
+      g=bmFind(city); if(g){ cb(g); return; }
+      g=fromLS(); if(g){ cb(g); return; }
+      fromAPI();
+    }).catch(function(){ fromAPI() });
+    return;
+  }
+  fromAPI();
 }
 
 /* 从后端 /vendor 本地加载 MapLibre。
@@ -2852,9 +3214,11 @@ function addTerrainMarkers(items){
   CMAP._popup=CMAP._popup||new maplibregl.Popup({offset:16,closeButton:false,closeOnClick:true});
   items.forEach(function(p){
     var w=gcj02ToWgs84(p.lat,p.lng); // WGS-84(卫星/地形底图用)
+    // 排进行程的用品牌绿 + 圆形;其余按类型上色,也换个头部外形(见 TSHAPE/TRULE)
+    var shp=inPlan(p)?'circle':tshape(p.type);
     var col=inPlan(p)?'#0F7A57':tcolor(p.type);
     var el=document.createElement('div');
-    el.innerHTML='<svg width="20" height="26" viewBox="0 0 20 26"><path d="M10 25C10 25 19 15 19 9C19 4 15 1 10 1C5 1 1 4 1 9C1 15 10 25 10 25Z" fill="'+col+'" stroke="#fff" stroke-width="2"/><circle cx="10" cy="9" r="3" fill="#fff"/></svg>';
+    el.innerHTML=pinSvg(col,20,26,10,9,8,25.5,shp);
     el.style.cssText='cursor:pointer;width:20px;height:26px';
     var mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([w.lng,w.lat]).addTo(CMAP.map);
     mk._gcj=[p.lng,p.lat];          // 高德 GCJ-02(街道/交通底图用)
@@ -2928,7 +3292,10 @@ function afterCityMap(items){
   $('cityCount').innerHTML='<i>'+items.length+'</i> 个景点'+
     (S.typeFilter?' · '+S.typeFilter:'')+(S.plan?' · 已排 '+planCount():'');
   $('cityViewCtl').style.display='flex';
-  var txt=CMAP.eng==='ml'
+  syncCityCtl();
+  var txt=CMAP.eng==='cute'
+    ? ('漫画简图 · '+(cuteRings(CUTE_GEO[S.city]).length?'真实城市轮廓':'手绘示意轮廓(未取到边界数据)'))
+    : CMAP.eng==='ml'
     ? ('真三维地形 · '+(S.base==='sat'?'卫星俯瞰':'交通图'))
     : (S.base==='sat'?'卫星实景':'街道');
   $('cityMapSub').innerHTML='全城 '+items.length+' 个景点 · '+txt+
@@ -2938,6 +3305,7 @@ function afterCityMap(items){
 /* 底图拿不到时的兜底 */
 function cityMapFallback(items){
   $('cityMapBox').classList.remove('tmap-on');
+  $('cityMapBox').classList.remove('cute-on');
   $('cityCount').style.display='none';
   $('cityViewCtl').style.display='none';
   var box=$('cityMapBox'); if(box)box.innerHTML='';   // 清残留,避免和示意图叠在一起
@@ -2971,6 +3339,586 @@ function renderCityEmpty(){
   });
   box.appendChild(t);box.appendChild(d);box.appendChild(chips);
   $('cityMapBox').innerHTML='';$('cityMapBox').appendChild(box);
+}
+
+/* ---------- 动漫可爱风简略图(西安试点) ----------
+ * 和真三维地形是两条完全不同的路:这里不加载任何地图 SDK,整张图是手绘的 SVG。
+ *   城市轮廓 —— 用高德返回的真实边界,抽稀后做圆角平滑,只留"一眼能认出是哪座城"的形
+ *   大致地形 —— 山丘/水面/树,锚在"自然风光、公园、河湖"这类景点的真实位置上,
+ *                不是随便撒的装饰;城外再补几笔云和远山撑起画面
+ *   景点标记 —— 复用 TGLYPH 语义剪影,缩小成圆头可爱图钉
+ * 好处:零外部依赖、离线能看、风格完全可控。代价:不是真实底图,所以图上必须标清楚。
+ * 现在只在西安试点,验证可行后把 CUTE_ALL 置 true 即可全局开放(CUTE_PILOT 可删)。
+ */
+var CUTE_PILOT=['西安'];
+var CUTE_ALL=false;
+var CUTE={pick:null,border:null,view:{s:1,tx:0,ty:0}};   // pick=选中的景点;view=缩放/平移(放大用)
+var CUTE_GEO={};                          // city -> 边界 GeoJSON(内存缓存,切模式时不重新请求)
+function cuteAvail(){return CUTE_ALL||CUTE_PILOT.indexOf(S.city)>=0}
+function cuteOn(){return !!S.cute&&cuteAvail()}
+
+/* 确定性伪随机:用城市名做种子。同一座城每次刷新画出的山丘位置都一样 ——
+   换成 Math.random() 的话,每切一次类型筛选整张图的地形就跳一次,看着像渲染出错。 */
+function cuteHash(str){var h=2166136261,i;
+  str=String(str||'x');
+  for(i=0;i<str.length;i++){h^=str.charCodeAt(i);h=(h*16777619)>>>0}
+  return h>>>0;}
+function cuteRand(seed){var s=seed>>>0;
+  return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296};}
+
+/* 经纬度 → 画布坐标。y 必须走墨卡托:直接用纬度的话,西安 34°N 会被纵向压扁,
+   市界看起来像被人踩过。 */
+function cuteProjector(pts,W,H,pad){
+  var i,lo0=1e9,lo1=-1e9,la0=1e9,la1=-1e9;
+  for(i=0;i<pts.length;i++){
+    if(pts[i][0]<lo0)lo0=pts[i][0]; if(pts[i][0]>lo1)lo1=pts[i][0];
+    if(pts[i][1]<la0)la0=pts[i][1]; if(pts[i][1]>la1)la1=pts[i][1];
+  }
+  /* 量纲必须一致:x 也换算成弧度。只把 y 取墨卡托而 x 留着"度"的话,
+     两者的尺度差 57 倍,整座城会被压成一条横着的细线(实测纵向只剩 5px)。 */
+  function mx(lo){return lo*Math.PI/180}
+  function my(la){return Math.log(Math.tan((90+la)*Math.PI/360))}
+  var y0=my(la0),y1=my(la1);
+  var dx=Math.max(mx(lo1)-mx(lo0),1e-9),dy=Math.max(y1-y0,1e-9);
+  var k=Math.min((W-pad*2)/dx,(H-pad*2)/dy);
+  var ox=(W-dx*k)/2,oy=(H-dy*k)/2;
+  return function(lng,lat){return [ox+(mx(lng)-mx(lo0))*k, oy+(y1-my(lat))*k]};
+}
+/* Douglas-Peucker 抽稀。边界动辄几千个点,全画上去轮廓是一圈毛刺,
+   简略图要的是干净的形。eps 用画布像素,比用经纬度直观得多。 */
+function cuteSimplify(pts,eps){
+  if(pts.length<4)return pts.slice();
+  /* 闭合环(首尾同点,高德给的市界就是)不能直接跑 DP:基准线段"首点→尾点"长度为 0,
+     所有中间点到它的距离都是 0,一个点都保不住 —— 670 点的市界会退化成 2 个点,
+     然后被当垃圾丢掉,整张图只能画兜底的圆润假轮廓。
+     先找离首点最远的点当第二极点,把环拆成两条链分别抽稀,再拼回去。 */
+  if(pts[0][0]===pts[pts.length-1][0]&&pts[0][1]===pts[pts.length-1][1]){
+    var fi=1,fd=-1,i2,dx,dy,d2;
+    for(i2=1;i2<pts.length-1;i2++){
+      dx=pts[i2][0]-pts[0][0];dy=pts[i2][1]-pts[0][1];d2=dx*dx+dy*dy;
+      if(d2>fd){fd=d2;fi=i2}
+    }
+    var ha=cuteSimplifyOpen(pts.slice(0,fi+1),eps);
+    var hb=cuteSimplifyOpen(pts.slice(fi),eps);
+    var merged=ha.concat(hb.slice(1));          // 两链在极点处共享一点,拼的时候去重
+    return merged;
+  }
+  return cuteSimplifyOpen(pts,eps);
+}
+function cuteSimplifyOpen(pts,eps){
+  if(pts.length<4)return pts.slice();
+  var keep=[],i;for(i=0;i<pts.length;i++)keep.push(false);
+  keep[0]=keep[pts.length-1]=true;
+  (function seg(a,b){
+    if(b-a<2)return;
+    var ax=pts[a][0],ay=pts[a][1],bx=pts[b][0],by=pts[b][1];
+    var vx=bx-ax,vy=by-ay,vl=Math.sqrt(vx*vx+vy*vy)||1e-9;
+    var dmax=-1,idx=-1,j,d;
+    for(j=a+1;j<b;j++){
+      d=Math.abs((pts[j][0]-ax)*vy-(pts[j][1]-ay)*vx)/vl;
+      if(d>dmax){dmax=d;idx=j}
+    }
+    if(idx>0&&dmax>eps){keep[idx]=true;seg(a,idx);seg(idx,b)}
+  })(0,pts.length-1);
+  var out=[];for(i=0;i<pts.length;i++)if(keep[i])out.push(pts[i]);
+  return out;
+}
+/* 闭合 Catmull-Rom → 三次贝塞尔:把折线变成圆润的手绘曲线 */
+function cuteSmooth(pts,t){
+  if(pts.length<3)return '';
+  t=t===undefined?1:t;
+  var n=pts.length,i,p0,p1,p2,p3;
+  var d='M'+pts[0][0].toFixed(1)+' '+pts[0][1].toFixed(1);
+  for(i=0;i<n;i++){
+    p0=pts[(i-1+n)%n];p1=pts[i];p2=pts[(i+1)%n];p3=pts[(i+2)%n];
+    d+='C'+(p1[0]+(p2[0]-p0[0])/6*t).toFixed(1)+' '+(p1[1]+(p2[1]-p0[1])/6*t).toFixed(1)+
+       ' '+(p2[0]-(p3[0]-p1[0])/6*t).toFixed(1)+' '+(p2[1]-(p3[1]-p1[1])/6*t).toFixed(1)+
+       ' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1);
+  }
+  return d+'Z';
+}
+/* 从 GeoJSON 里取出所有环,按点数降序 —— 第一个通常是主城区,后面是飞地/郊区块 */
+function cuteRings(geo){
+  if(!geo||!geo.geometry)return [];
+  var coords=geo.geometry.coordinates;
+  var polys=geo.geometry.type==='MultiPolygon'?coords:[coords];
+  var rings=[];
+  polys.forEach(function(poly){poly.forEach(function(r){rings.push(r)})});
+  rings.sort(function(a,b){return b.length-a.length});
+  return rings;
+}
+/* ---- 地形简笔画 ---- */
+function cuteHill(x,y,s){
+  return '<path d="M'+(x-s)+' '+y+'Q'+(x-s*0.42)+' '+(y-s*0.92)+' '+x+' '+(y-s)+
+    'Q'+(x+s*0.48)+' '+(y-s*0.86)+' '+(x+s)+' '+y+'Z" fill="#C6DFC2" stroke="#7BA183" stroke-width="1.7" stroke-linejoin="round"/>'+
+    '<path d="M'+(x-s*0.3)+' '+y+'Q'+(x+s*0.08)+' '+(y-s*0.58)+' '+(x+s*0.5)+' '+y+'Z" fill="#ADD3AC" stroke="#7BA183" stroke-width="1.4" stroke-linejoin="round"/>';
+}
+function cuteTree(x,y,s){
+  return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+'v'+(-s*0.46).toFixed(1)+'" stroke="#A6835A" stroke-width="'+(s*0.17).toFixed(1)+'" stroke-linecap="round"/>'+
+    '<circle cx="'+x.toFixed(1)+'" cy="'+(y-s*0.7).toFixed(1)+'" r="'+(s*0.36).toFixed(1)+'" fill="#A8D5A2" stroke="#6E9C74" stroke-width="1.4"/>';
+}
+function cuteWater(x,y,s){
+  return '<ellipse cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" rx="'+s.toFixed(1)+'" ry="'+(s*0.52).toFixed(1)+
+    '" fill="#BFE0EF" stroke="#7FB3CC" stroke-width="1.5"/>'+
+    '<path d="M'+(x-s*0.45).toFixed(1)+' '+(y+s*0.12).toFixed(1)+'q'+(s*0.22).toFixed(1)+' '+(-s*0.16).toFixed(1)+' '+(s*0.44).toFixed(1)+' 0'+
+    'q'+(s*0.22).toFixed(1)+' '+(s*0.16).toFixed(1)+' '+(s*0.44).toFixed(1)+' 0" fill="none" stroke="#8FC2DA" stroke-width="1.3" stroke-linecap="round"/>';
+}
+function cuteCloud(x,y,s){
+  return '<g fill="#fff" stroke="#DCE6EC" stroke-width="1.5">'+
+    '<circle cx="'+(x-s*0.52).toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(s*0.33).toFixed(1)+'"/>'+
+    '<circle cx="'+(x-s*0.02).toFixed(1)+'" cy="'+(y-s*0.24).toFixed(1)+'" r="'+(s*0.45).toFixed(1)+'"/>'+
+    '<circle cx="'+(x+s*0.5).toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(s*0.31).toFixed(1)+'"/>'+
+    '<rect x="'+(x-s*0.58).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(s*1.14).toFixed(1)+'" height="'+(s*0.38).toFixed(1)+'" rx="'+(s*0.19).toFixed(1)+'"/></g>';
+}
+/* ---------- 等高线 ----------
+ * 没有真实 DEM,但「到市界的距离」+「山类景点处的高斯隆起」这两个信号合起来,
+ * 画出来的就是地形图那种一层套一层的线:城市形状决定大轮廓(越往城里越高),
+ * 山的位置决定局部隆起,水的位置压成洼地。
+ */
+function cuteInPoly(px,py,poly){
+  var inside=false,i,j;
+  for(i=0,j=poly.length-1;i<poly.length;j=i++){
+    var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+function cuteDistPoly(px,py,poly){
+  var best=1e9,i,j;
+  for(i=0,j=poly.length-1;i<poly.length;j=i++){
+    var ax=poly[j][0],ay=poly[j][1],bx=poly[i][0],by=poly[i][1];
+    var vx=bx-ax,vy=by-ay,vl=vx*vx+vy*vy;
+    var t=vl?((px-ax)*vx+(py-ay)*vy)/vl:0;
+    t=t<0?0:(t>1?1:t);
+    var dx=px-(ax+vx*t),dy=py-(ay+vy*t),d=dx*dx+dy*dy;
+    if(d<best)best=d;
+  }
+  return Math.sqrt(best);
+}
+/* peaks: [x,y,高度,影响半径]。山给正高,水给负高(压成洼地)。 */
+function cuteField(poly,peaks,W,H,nx,ny){
+  var f=new Float64Array(nx*ny),i,j,k,x,y,dx=W/(nx-1),dy=H/(ny-1);
+  for(j=0;j<ny;j++)for(i=0;i<nx;i++){
+    x=i*dx;y=j*dy;
+    var h=cuteInPoly(x,y,poly)?cuteDistPoly(x,y,poly):-cuteDistPoly(x,y,poly);
+    for(k=0;k<peaks.length;k++){
+      var ex=x-peaks[k][0],ey=y-peaks[k][1],sg=peaks[k][3];
+      h+=peaks[k][2]*Math.exp(-(ex*ex+ey*ey)/(2*sg*sg));
+    }
+    f[j*nx+i]=h;
+  }
+  return {f:f,nx:nx,ny:ny,dx:dx,dy:dy};
+}
+/* Marching squares 的 16 种情况 → 走哪几条边(0=上 1=右 2=下 3=左),每两点一段。 */
+var CUTE_MS=[[],[3,0],[0,1],[3,1],[1,2],[3,0,1,2],[0,2],[3,2],
+             [2,3],[2,0],[0,1,2,3],[2,1],[1,3],[1,0],[0,3],[]];
+/* 同一层的线段端点本来就是重合的,按任意顺序 stroke 出来视觉上就是连续曲线 ——
+   不再花几十行去拼环(拼错还会出现乱窜的长线)。 */
+function cuteContour(F,L){
+  var nx=F.nx,ny=F.ny,dx=F.dx,dy=F.dy,f=F.f,i,j,m,t,d='';
+  var a,b,c,e,x0,y0,x1,y1,px,py,k,tab;
+  for(j=0;j<ny-1;j++)for(i=0;i<nx-1;i++){
+    a=f[j*nx+i];b=f[j*nx+i+1];c=f[(j+1)*nx+i+1];e=f[(j+1)*nx+i];
+    m=(a>L?1:0)|(b>L?2:0)|(c>L?4:0)|(e>L?8:0);
+    if(m===0||m===15)continue;
+    x0=i*dx;y0=j*dy;x1=x0+dx;y1=y0+dy;
+    tab=CUTE_MS[m];
+    for(k=0;k+1<tab.length;k+=2){
+      for(var q=0;q<2;q++){
+        var ed=q?tab[k+1]:tab[k];
+        if(ed===0){t=(L-a)/(b-a);px=x0+dx*t;py=y0}
+        else if(ed===1){t=(L-b)/(c-b);px=x1;py=y0+dy*t}
+        else if(ed===2){t=(L-e)/(c-e);px=x0+dx*t;py=y1}
+        else {t=(L-a)/(e-a);px=x0;py=y0+dy*t}
+        d+=q?'L'+px.toFixed(1)+' '+py.toFixed(1):'M'+px.toFixed(1)+' '+py.toFixed(1);
+      }
+    }
+  }
+  return d;
+}
+
+/* 图钉避让。景点在城区高度集中(西安 83 个,大部分挤在主城区),按真实坐标直接画
+   会叠成一团黑,分不清谁是谁。这里做几次松弛:挨太近的两个沿连线各退一半,
+   位移封顶(默认 14px)且整体夹在画布内 —— "相对位置"仍然读得出来,不会把景点推到别的区。 */
+function cuteSpread(pts,minD,maxShift,W,H){
+  var n=pts.length,i,j,k,dx,dy,d;
+  var out=pts.map(function(p){return [p[0],p[1],p[0],p[1]]});   // x,y,原x,原y
+  for(k=0;k<60;k++){
+    var moved=false;
+    for(i=0;i<n;i++)for(j=i+1;j<n;j++){
+      dx=out[j][0]-out[i][0];dy=out[j][1]-out[i][1];
+      d=Math.sqrt(dx*dx+dy*dy);
+      if(d>=minD)continue;
+      if(d<1e-6){dx=(i%2?1:-1);dy=(j%2?1:-1);d=Math.sqrt(2)}   // 完全重合:给个确定方向岔开
+      var push=(minD-d)/2,ux=dx/d,uy=dy/d;
+      out[i][0]-=ux*push;out[i][1]-=uy*push;
+      out[j][0]+=ux*push;out[j][1]+=uy*push;
+      moved=true;
+    }
+    if(!moved)break;
+  }
+  for(i=0;i<n;i++){
+    dx=out[i][0]-out[i][2];dy=out[i][1]-out[i][3];
+    d=Math.sqrt(dx*dx+dy*dy);
+    if(d>maxShift){out[i][0]=out[i][2]+dx/d*maxShift;out[i][1]=out[i][3]+dy/d*maxShift}
+    out[i][0]=Math.max(8,Math.min(W-8,out[i][0]));
+    out[i][1]=Math.max(18,Math.min(H-8,out[i][1]));
+  }
+  return out;
+}
+/* 可爱图钉:圆头 + 小尖尾 + 白色语义剪影。锚点在尖,尖落在 (0,0)。 */
+function cutePin(col,shp,r){
+  r=r||7.6;
+  var cy=-(r*1.76).toFixed(1),s=(r*0.6).toFixed(2);
+  return '<path d="M0 0L'+(r*0.66).toFixed(1)+' '+(-r*0.78).toFixed(1)+'L'+(-r*0.66).toFixed(1)+' '+(-r*0.78).toFixed(1)+'Z" '+
+      'fill="'+col+'" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/>'+
+    '<circle cx="0" cy="'+cy+'" r="'+r+'" fill="'+col+'" stroke="#fff" stroke-width="2"/>'+
+    '<circle cx="'+(-r*0.34).toFixed(1)+'" cy="'+(cy-r*0.36).toFixed(1)+'" r="'+(r*0.19).toFixed(1)+'" fill="#fff" opacity=".55"/>'+
+    '<g transform="translate(0,'+cy+') scale('+s+')" fill="#fff">'+(TGLYPH[shp]||TGLYPH.dot)+'</g>';
+}
+/* 圆角气泡:SVG 里没有自动换行,名字先截断再画,框宽按字数给 */
+function cuteBubble(x,y,name,sub){
+  var n=String(name||'');if(n.length>9)n=n.slice(0,8)+'…';
+  var w=Math.max(52,n.length*12+18),h=34,yy=y-46;
+  return '<g><rect x="'+(x-w/2).toFixed(1)+' '+'" y="'+yy.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+h+
+    '" rx="11" fill="#fff" stroke="#C9B48C" stroke-width="1.6"/>'+
+    '<path d="M'+(x-5)+' '+(yy+h)+'L'+x+' '+(yy+h+7)+'L'+(x+5)+' '+(yy+h)+'Z" fill="#fff" stroke="#C9B48C" stroke-width="1.6"/>'+
+    '<text x="'+x.toFixed(1)+'" y="'+(yy+15).toFixed(1)+'" text-anchor="middle" font-size="12.5" font-weight="600" fill="#3E423B">'+esc(n)+'</text>'+
+    '<text x="'+x.toFixed(1)+'" y="'+(yy+28).toFixed(1)+'" text-anchor="middle" font-size="10.5" fill="#8A8F84">'+esc(sub||'')+'</text></g>';
+}
+/* 漫画简图主渲染。整张图重建一次,选中态/筛选变化都走重绘(和城市网格一个套路:
+   选中态是画出来那一刻定死的,改状态就得重画)。 */
+function renderCuteMap(items,geo){
+  var box=$('cityMapBox'),W=400,H=372,pad=30,i;
+  var rings=cuteRings(geo);
+  var rnd=cuteRand(cuteHash(cityLabel()));
+  /* 画框:有边界就按边界,没边界就按景点。两种情况都得把内容完整框住。 */
+  var bpts=[];
+  if(rings.length)rings[0].forEach(function(p){bpts.push(p)});
+  else items.forEach(function(p){if(typeof p.lat==='number')bpts.push([p.lng,p.lat])});
+  if(bpts.length<2){toast('没有可用的坐标');return}
+  var proj=cuteProjector(bpts,W,H,pad);
+  /* 注意:proj 吃的是 (lng,lat) 两个数,千万别写成 .map(proj) ——
+     Array.map 传的是 (元素, 下标, 数组),第二个参数会变成下标,整条市界会被投成垃圾坐标。 */
+  function pj(p){return proj(p[0],p[1])}
+  var g='';
+
+  /* 主轮廓。没拿到真实边界时画一个圆润的抽象地块,并明确标成示意 —— 不能拿假形状冒充市界。
+     先把能画出来的环算成 path 存好,再统一描边 —— 别在画的时候才去取 rings[i],
+     没边界那条路会拿到 undefined。 */
+  var outlines=[];
+  if(rings.length){
+    for(i=0;i<Math.min(rings.length,4);i++){
+      var sp=cuteSimplify(rings[i].map(pj),2.4);
+      if(sp.length>=3)outlines.push(cuteSmooth(sp,0.9));
+    }
+  }
+  if(!outlines.length){
+    outlines.push(cuteSmooth([[W*0.2,H*0.28],[W*0.8,H*0.24],[W*0.86,H*0.62],[W*0.6,H*0.82],[W*0.26,H*0.74]],1));
+  }
+  var mainD=outlines[0];
+  /* 市界外不再铺底色:地块本体只填环内,地形/水面/山被 clipPath 裁在环内,
+     环外完全是透明 —— 露出容器的纯白背景,等于"把轮廓外裁掉"。 */
+  /* 地块本体 + 醒目的轮廓线。线要够粗,不然"简略图"看着就是一张空白纸。 */
+  outlines.forEach(function(d2,i){
+    g+='<path class="cuteoutline" data-i="'+i+'" d="'+d2+'" fill="'+(i?'#F3E7C9':'#F6ECD2')+
+       '" stroke="'+(i?'#A98A5C':'#8B6F47')+
+       '" stroke-width="'+(i?2:3.2)+'" stroke-linejoin="round"/>';
+  });
+
+  /* 城内:等高线 + 水面 + 山。全部裁进轮廓里,不会飘到城外。 */
+  var inner='';
+  var water=[],hills=[];
+  /* 判据要看 type **和** name:"渭河"的 type 是"自然风光"这种大类,
+     单看 type 认不出它是水,得靠名字。两头都看才不会把地形画错地方。 */
+  items.forEach(function(p){
+    if(typeof p.lat!=='number')return;
+    var t=(p.type||'')+' '+(p.name||'');
+    if(/河|湖|海|溪|湿地|泉|水库|江|池|潭|湾/.test(t))water.push(p);
+    else if(/山|峰|岭|峡谷|森林|草原|田园|乡村|风景|自然|公园|植物园/.test(t))hills.push(p);
+  });
+  /* 高程场:山类景点隆起、水类压成洼地,再叠上"离市界越远越高"的底。
+     等高线因此和真实景点挂钩 —— 山多的地方线就密。 */
+  var poly=rings.length?rings[0].map(pj):[];
+  var peaks=[];
+  hills.slice(0,12).forEach(function(p){
+    var xy=proj(p.lng,p.lat);
+    var mtn=/山|峰|岭|原|坡|谷|陵/.test(p.name||'');
+    peaks.push([xy[0],xy[1],mtn?76:36,mtn?48:30]);
+  });
+  water.slice(0,8).forEach(function(p){
+    var xy=proj(p.lng,p.lat);peaks.push([xy[0],xy[1],-52,34]);
+  });
+  /* 高程场:山类景点隆起、水类压成洼地,再叠"离市界越远越高"的底 ——
+     地形因此和真实景点挂钩。 */
+  if(poly.length>=3){
+    var F=cuteField(poly,peaks,W,H,64,60);
+    var fmin=1e9,fmax=-1e9;
+    for(i=0;i<F.f.length;i++){
+      if(cuteInPoly((i%F.nx)*F.dx,Math.floor(i/F.nx)*F.dy,poly)){
+        if(F.f[i]<fmin)fmin=F.f[i]; if(F.f[i]>fmax)fmax=F.f[i];
+      }
+    }
+    var frange=fmax-fmin;
+    /* 不同海拔染不同颜色:低谷浅绿 → 平地麦色 → 丘陵赭 → 主峰深褐。
+       直接按高程场逐格上色,比"等高线填色"稳定 —— 不会出现乱窜的填充块。
+       每格画成略大的方点盖掉接缝,色带边缘是台阶状,正合简略卡通风。 */
+    if(frange>6){
+      var CUTE_BANDS=[
+        '#DCECCB','#CDE3B6','#EADBA0','#E0C57F','#D2A968','#BC8850','#A06A38'
+      ];
+      var nb=CUTE_BANDS.length;
+      for(j=0;j<F.ny;j++)for(i=0;i<F.nx;i++){
+        var v=F.f[j*F.nx+i];
+        var ng=(v-fmin)/frange;
+        if(ng<0||ng>1)continue;
+        var bi=0;for(;bi<nb-1;bi++){ if(ng<(bi+1)/nb)break; }
+        inner+='<rect x="'+(i*F.dx).toFixed(1)+'" y="'+(j*F.dy).toFixed(1)+
+               '" width="'+(F.dx+0.7).toFixed(1)+'" height="'+(F.dy+0.7).toFixed(1)+
+               '" fill="'+CUTE_BANDS[bi]+'"/>';
+      }
+      /* 再叠等高线本身(描边),压在色块上层次更清楚 */
+      var lv=[],nLv=10;
+      for(i=1;i<=nLv;i++)lv.push(fmin+frange*(0.06+0.9*i/(nLv+1)));
+      lv.forEach(function(L,k){
+        var cd=cuteContour(F,L);
+        if(!cd)return;
+        var major=(k%2===1);
+        inner+='<path class="cutecontour" d="'+cd+'" fill="none" stroke="'+(major?'#7A5C3A':'#A98A5C')+
+          '" stroke-width="'+(major?1.4:0.8)+'" stroke-linecap="round" opacity="'+(major?'.7':'.42')+'"/>';
+      });
+    }
+  }
+  water.slice(0,6).forEach(function(p){
+    var xy=proj(p.lng,p.lat);inner+=cuteWater(xy[0],xy[1],9+rnd()*5);
+  });
+  hills.slice(0,10).forEach(function(p){
+    var xy=proj(p.lng,p.lat);inner+=cuteHill(xy[0],xy[1],10+rnd()*6);
+  });
+  /* 把城内地形/水面/山裁进市界,不会飘到城外 */
+  g+='<defs><clipPath id="cuteClip"><path d="'+mainD+'"/></clipPath></defs>';
+  g+='<g clip-path="url(#cuteClip)">'+inner+'</g>';
+
+  /* 景点图钉。景点在城区高度集中,83 个硬塞进一张简略图必然叠成一坨 ——
+     这里按"重要程度"取舍:排进行程的 > 评分高的,太挤的位置只留最重要的那个。
+     稀疏区域照常全画,所以不是一刀切砍成前 N 个。取舍掉的在角标里说明。
+     这是简略图,主体是等高线地形,标记是配角,不能反过来把地形糊掉。 */
+  var pr=items.length>60?5.2:(items.length>30?6:7);
+  var idx=[],rawAll=[];
+  items.forEach(function(p,i){
+    if(typeof p.lat!=='number')return;
+    idx.push(i);rawAll.push(proj(p.lng,p.lat));
+  });
+  var minD=pr*2+1.5;
+  /* 先把重合的点岔开,再取舍。顺序反过来的话,城区一堆点挤在几像素内,
+     贪心取舍只会留下个位数。位移压在 14px 以内(市界尺度约 340px),位置仍然可信 ——
+     不做大幅避让是为了不把景点推到别的区去,地形图上的位置不能撒谎。 */
+  var laidAll=cuteSpread(rawAll,minD,14,W,H);
+  /* 优先级:当前选中的 > 已排进行程的 > 评分高的。选中的那个必须画出来,
+     否则点列表定位过去图上什么都没有。 */
+  var order=idx.slice().sort(function(a,b){
+    var ca=CUTE.pick&&items[a].id===CUTE.pick?1:0, cb=CUTE.pick&&items[b].id===CUTE.pick?1:0;
+    if(ca!==cb)return cb-ca;
+    var pa=inPlan(items[a])?1:0, pb=inPlan(items[b])?1:0;
+    if(pa!==pb)return pb-pa;
+    return (Number(items[b].rating)||0)-(Number(items[a].rating)||0);
+  });
+  var kept=[],keptRaw=[];
+  order.forEach(function(i){
+    var xy=laidAll[idx.indexOf(i)],k,dx,dy;
+    if(!xy)return;
+    for(k=0;k<keptRaw.length;k++){
+      dx=xy[0]-keptRaw[k][0];dy=xy[1]-keptRaw[k][1];
+      if(dx*dx+dy*dy<minD*minD*0.72)return;      // 略放宽:避让后留下的小间隙可以接受
+    }
+    kept.push(i);keptRaw.push(xy);
+  });
+  var pos={};kept.forEach(function(i,k){pos[i]=keptRaw[k]});
+  var hidden=idx.length-kept.length;
+  kept.forEach(function(i){
+    var p=items[i],xy=pos[i];
+    var shp=inPlan(p)?'circle':tshape(p.type),col=inPlan(p)?'#0F7A57':tcolor(p.type);
+    var on=CUTE.pick&&CUTE.pick===p.id;
+    g+='<g class="cutepin" data-id="'+esc(p.id)+'" style="cursor:pointer" transform="translate('+
+       xy[0].toFixed(1)+','+xy[1].toFixed(1)+')'+(on?' scale(1.35)':'')+'">'+
+       cutePin(col,shp,pr)+'</g>';
+  });
+
+  /* 选中的那个给个气泡:名字 + 类型 · 评分 */
+  if(CUTE.pick){
+    var sp=null,spi=-1;items.forEach(function(p,i){if(p.id===CUTE.pick){sp=p;spi=i}});
+    if(sp&&pos[spi]){
+      g+=cuteBubble(pos[spi][0],pos[spi][1]-pr*1.8,sp.name,
+        (sp.type||'')+' · '+Number(sp.rating||0).toFixed(1)+' 分 · '+(sp.cost?'¥'+sp.cost:'免费'));
+    }
+  }
+
+  /* 固定纸色底,放大/平移时始终铺满视口(缩放内容在 cuteRoot 里做) */
+  var outBg='<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#FFFFFF"/>';
+  box.innerHTML='<svg id="cuteSvg" class="cutesvg" viewBox="0 0 '+W+' '+H+'" '+
+    'preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">'+
+    outBg+'<g id="cuteRoot" transform="translate('+CUTE.view.tx.toFixed(1)+','+CUTE.view.ty.toFixed(1)+') '+
+    'scale('+CUTE.view.s.toFixed(3)+')">'+g+'</g></svg>';
+  /* 点图钉 = 选中/取消。状态变了整张图重画,不去改单个节点。 */
+  box.querySelectorAll('.cutepin').forEach(function(el){
+    el.onclick=function(){
+      var id=el.getAttribute('data-id');
+      CUTE.pick=(CUTE.pick===id?null:id);
+      renderCity();
+    };
+  });
+  /* ---------- 缩放 / 平移 ----------
+   * 滚轮以光标为中心放大;按住拖动平移;双击复位。
+   * svg 用了 preserveAspectRatio="meet",屏幕像素和 viewBox 之间差一个等比因子,
+   * 先按 letterbox 算出 scale 再换算,平移/缩放才不会错位。
+   * 用 setPointerCapture 把拖动锁在 svg 上,避免每次重绘都往 window 上累加监听器。 */
+  var csvg=box.querySelector('#cuteSvg'), croot=csvg.querySelector('#cuteRoot');
+  var suppressClick=false;
+  function applyView(){ croot.setAttribute('transform',
+    'translate('+CUTE.view.tx.toFixed(1)+','+CUTE.view.ty.toFixed(1)+') scale('+CUTE.view.s.toFixed(3)+')'); }
+  function meetScale(){
+    var r=csvg.getBoundingClientRect();
+    return {r:r, scale:Math.min(r.width/W, r.height/H)};
+  }
+  csvg.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var m=meetScale();
+    var mx=(e.clientX-m.r.left)/m.scale, my=(e.clientY-m.r.top)/m.scale;
+    var ns=Math.max(1, Math.min(9, CUTE.view.s*Math.exp(-e.deltaY*0.0015)));
+    var f=ns/CUTE.view.s;
+    CUTE.view.tx = mx - (mx-CUTE.view.tx)*f;
+    CUTE.view.ty = my - (my-CUTE.view.ty)*f;
+    CUTE.view.s = ns; applyView();
+  }, {passive:false});
+  csvg.addEventListener('pointerdown', function(e){
+    if(e.button!==0)return;
+    if(e.target.closest && e.target.closest('.cutepin'))return;   // 点图钉不触发平移,留给选中
+    csvg.setPointerCapture(e.pointerId);
+    CUTE._lx=e.clientX; CUTE._ly=e.clientY; suppressClick=false; CUTE._drag=true;
+  });
+  csvg.addEventListener('pointermove', function(e){
+    if(!CUTE._drag)return;
+    var m=meetScale(), dx=e.clientX-CUTE._lx, dy=e.clientY-CUTE._ly;
+    if(Math.abs(dx)+Math.abs(dy)>4) suppressClick=true;
+    CUTE.view.tx += dx/m.scale; CUTE.view.ty += dy/m.scale;
+    CUTE._lx=e.clientX; CUTE._ly=e.clientY; applyView();
+  });
+  function endDrag(){ CUTE._drag=false; }
+  csvg.addEventListener('pointerup', endDrag);
+  csvg.addEventListener('pointercancel', endDrag);
+  csvg.addEventListener('dblclick', function(){ CUTE.view={s:1,tx:0,ty:0}; applyView(); });
+  /* 拖拽后抑制误触发的图钉选中 */
+  box.querySelectorAll('.cutepin').forEach(function(el){
+    el.addEventListener('click', function(e){ if(suppressClick){ e.stopPropagation(); e.preventDefault(); } }, true);
+  });
+}
+
+/* 行程路线图(路线页 #mapBox)。和全城漫画简图同一套绘制,不依赖任何网络/SDK,
+ * 必定能显示 —— 这是前面"行程地图整页空白"的根因:路线页原来只认腾讯 GL SDK,
+ * 沙箱/无网络环境下脚本请求挂起、回调永不触发,地图框就一直空着。
+ * 这里默认画真实城市轮廓 + 等高线地形 + 按行程顺序连线的编号图钉,和你能看见的全城图一致。 */
+function routeBbox(pts,margin){
+  if(!pts.length)return [];
+  var lats=pts.map(function(p){return p[1]}), lngs=pts.map(function(p){return p[0]});
+  var lo0=Math.min.apply(null,lngs), lo1=Math.max.apply(null,lngs);
+  var la0=Math.min.apply(null,lats), la1=Math.max.apply(null,lats);
+  var dlo=Math.max((lo1-lo0)*margin,0.005), dla=Math.max((la1-la0)*margin,0.005);
+  return [[lo0-dlo,la0-dla],[lo0-dlo,la1+dla],[lo1+dlo,la1+dla],[lo1+dlo,la0-dla]];
+}
+function renderCuteRoute(items,geo,dayIdx){
+  var box=$('mapBox'),W=400,H=340,pad=20,i;
+  var rings=cuteRings(geo);
+  var rnd=cuteRand(cuteHash(cityLabel()+'-route'));
+  /* 路线图的投影以当天景点为中心,留出 35% 边距,比全城图更聚焦,
+     编号图钉不会太挤;同时真实市界仍作为背景轮廓画在周围。 */
+  var routePts=items.filter(function(p){return typeof p.lat==='number'}).map(function(p){return [p.lng,p.lat]});
+  var cityPts=[];
+  if(rings.length)rings[0].forEach(function(p){cityPts.push(p)});
+  var bpts=routePts.length?routeBbox(routePts,0.35):(cityPts.length?cityPts:routePts);
+  if(bpts.length<2){toast('没有可用的坐标');return}
+  var proj=cuteProjector(bpts,W,H,pad);
+  function pj(p){return proj(p[0],p[1])}
+  var g='';
+
+  /* 主轮廓。没拿到真实边界就用景点外接框画个圆角地块。 */
+  var outlines=[];
+  if(rings.length){
+    for(i=0;i<Math.min(rings.length,4);i++){
+      var sp=cuteSimplify(rings[i].map(pj),2.4);
+      if(sp.length>=3)outlines.push(cuteSmooth(sp,0.9));
+    }
+  }
+  if(!outlines.length){
+    var xsa=items.map(function(p){return proj(p.lng,p.lat)[0]}), ysa=items.map(function(p){return proj(p.lng,p.lat)[1]});
+    var x0=Math.min.apply(null,xsa),x1=Math.max.apply(null,xsa),y0=Math.min.apply(null,ysa),y1=Math.max.apply(null,ysa);
+    outlines.push(cuteSmooth([[x0-14,y0-10],[x1+14,y0-14],[x1+16,y1+10],[x0+8,y1+14],[x0-14,y1-2]],1));
+  }
+  var mainD=outlines[0];
+  outlines.forEach(function(d2,ii){
+    g+='<path class="cuteoutline" d="'+d2+'" fill="'+(ii?'#F3E7C9':'#F6ECD2')+'" stroke="'+(ii?'#A98A5C':'#8B6F47')+'" stroke-width="'+(ii?2:3.2)+'" stroke-linejoin="round"/>';
+  });
+
+  /* 城内地形色带 + 等高线(和全城图同逻辑) */
+  var inner='';
+  var water=[],hills=[];
+  items.forEach(function(p){
+    if(typeof p.lat!=='number')return;
+    var t=(p.type||'')+' '+(p.name||'');
+    if(/河|湖|海|溪|湿地|泉|水库|江|池|潭|湾/.test(t))water.push(p);
+    else if(/山|峰|岭|峡谷|森林|草原|田园|乡村|风景|自然|公园|植物园/.test(t))hills.push(p);
+  });
+  var poly=rings.length?rings[0].map(pj):[];
+  if(poly.length>=3){
+    var peaks=[];
+    hills.slice(0,12).forEach(function(p){var xy=proj(p.lng,p.lat);var mtn=/山|峰|岭|原|坡|谷|陵/.test(p.name||'');peaks.push([xy[0],xy[1],mtn?76:36,mtn?48:30]);});
+    water.slice(0,8).forEach(function(p){var xy=proj(p.lng,p.lat);peaks.push([xy[0],xy[1],-52,34]);});
+    var F=cuteField(poly,peaks,W,H,64,60);
+    var fmin=1e9,fmax=-1e9;
+    for(i=0;i<F.f.length;i++){if(cuteInPoly((i%F.nx)*F.dx,Math.floor(i/F.nx)*F.dy,poly)){if(F.f[i]<fmin)fmin=F.f[i];if(F.f[i]>fmax)fmax=F.f[i];}}
+    var frange=fmax-fmin;
+    if(frange>6){
+      var CUTE_BANDS=['#DCECCB','#CDE3B6','#EADBA0','#E0C57F','#D2A968','#BC8850','#A06A38'];
+      var nb=CUTE_BANDS.length;
+      for(var j=0;j<F.ny;j++)for(i=0;i<F.nx;i++){
+        var v=F.f[j*F.nx+i];var ng=(v-fmin)/frange;
+        if(ng<0||ng>1)continue;
+        var bi=0;for(;bi<nb-1;bi++){if(ng<(bi+1)/nb)break;}
+        inner+='<rect x="'+(i*F.dx).toFixed(1)+'" y="'+(j*F.dy).toFixed(1)+'" width="'+(F.dx+0.7).toFixed(1)+'" height="'+(F.dy+0.7).toFixed(1)+'" fill="'+CUTE_BANDS[bi]+'"/>';
+      }
+      var lv=[],nLv=10;
+      for(i=1;i<=nLv;i++)lv.push(fmin+frange*(0.06+0.9*i/(nLv+1)));
+      lv.forEach(function(L,k){
+        var cd=cuteContour(F,L);if(!cd)return;
+        var major=(k%2===1);
+        inner+='<path class="cutecontour" d="'+cd+'" fill="none" stroke="'+(major?'#7A5C3A':'#A98A5C')+'" stroke-width="'+(major?1.4:0.8)+'" stroke-linecap="round" opacity="'+(major?'.7':'.42')+'"/>';
+      });
+    }
+  }
+  water.slice(0,6).forEach(function(p){var xy=proj(p.lng,p.lat);inner+=cuteWater(xy[0],xy[1],9+rnd()*5);});
+  hills.slice(0,10).forEach(function(p){var xy=proj(p.lng,p.lat);inner+=cuteHill(xy[0],xy[1],10+rnd()*6);});
+  g+='<defs><clipPath id="cuteRouteClip"><path d="'+mainD+'"/></clipPath></defs>';
+  g+='<g clip-path="url(#cuteRouteClip)">'+inner+'</g>';
+
+  /* 路线:按行程顺序连线 + 编号图钉(1..n)。点少,间距留大些更清楚。 */
+  var idx=[],rawAll=[];
+  items.forEach(function(p,i){if(typeof p.lat==='number'){idx.push(i);rawAll.push(proj(p.lng,p.lat));}});
+  if(idx.length){
+    var laid=cuteSpread(rawAll,16,16,W,H);
+    var d='M'+laid[0][0].toFixed(1)+' '+laid[0][1].toFixed(1);
+    for(i=1;i<laid.length;i++)d+='L'+laid[i][0].toFixed(1)+' '+laid[i][1].toFixed(1);
+    g+='<defs><marker id="cuteArrow" markerWidth="9" markerHeight="9" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L9 4L0 8Z" fill="#0F7A57"/></marker></defs>';
+    g+='<path d="'+d+'" fill="none" stroke="#0F7A57" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" opacity=".82" marker-end="url(#cuteArrow)"/>';
+    laid.forEach(function(pt,k){
+      var x=pt[0],y=pt[1];
+      g+='<g class="cutenum" data-i="'+k+'">'+
+        '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="11.5" fill="#0F7A57" stroke="#fff" stroke-width="2.2"/>'+
+        '<text x="'+x.toFixed(1)+'" y="'+(y+4.5).toFixed(1)+'" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">'+(k+1)+'</text></g>';
+    });
+  }
+  if(dayIdx)g+='<text x="14" y="26" font-size="15" font-weight="700" fill="#7A5C3A" opacity=".8">第 '+dayIdx+' 天</text>';
+
+  box.innerHTML='<svg class="cutesvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" '+
+    'style="width:100%;height:100%;display:block;background:#FFFFFF">'+g+'</svg>';
 }
 
 function renderCityList(items){
@@ -3014,6 +3962,13 @@ function _scrollMapIntoView(id){
 /* 列表在页面下方、地图在上方:只飞镜头用户看不见,所以顺便把地图滚进视野 */
 function cityFocus(p,zoom){
   if(!p||typeof p.lat!=='number')return;
+  // 漫画简图没有地图实例可飞,改成在图上把这一点标出来(气泡 + 放大)
+  if(cuteOn()){
+    CUTE.pick=(CUTE.pick===p.id?null:p.id);
+    _scrollMapIntoView('cityMapBox');
+    renderCity();
+    return;
+  }
   if(!CMAP.map){toast('地图还没加载好');return}
   zoom=zoom||15.5;
   _scrollMapIntoView('cityMapBox');
@@ -3038,15 +3993,15 @@ function cityFocus(p,zoom){
 function poiRow(p){
   var c=tcolor(p.type),e=document.createElement('div');
   e.className='card';e.style.cssText='margin-bottom:8px;cursor:pointer';
-  e.innerHTML='<div class="hd"><div class="nm">'+p.name+
+  e.innerHTML='<div class="hd"><div class="nm">'+esc(p.name)+
     (inPlan(p)?'<span class="tg" style="margin-left:6px;background:var(--brand-soft);color:var(--brand);border-color:var(--brand-line)">已排</span>':'')+
     '</div><div class="sc">'+Number(p.rating||0).toFixed(1)+'</div></div>'+
-    '<div class="meta"><span class="tg" style="background:'+c+';border-color:'+c+';color:#fff">'+p.type+'</span>'+
+    '<div class="meta"><span class="tg" style="background:'+c+';border-color:'+c+';color:#fff">'+esc(p.type)+'</span>'+
     '<span class="tg">停留 '+dur(p.duration)+'</span>'+
-    (p.best_time_label?'<span class="tg hl">'+p.best_time_label+'</span>':'')+
-    '<span class="tg">'+(p.cost?'人均 ¥'+p.cost:'免费')+'</span>'+
+    (p.best_time_label?'<span class="tg hl">'+esc(p.best_time_label)+'</span>':'')+
+    '<span class="tg">'+(p.cost?'人均 ¥'+Number(p.cost):'免费')+'</span>'+
     (p.indoor?'<span class="tg">室内</span>':'')+'</div>'+
-    (p.highlight?'<div class="hl">'+p.highlight+'</div>':'')+
+    (p.highlight?'<div class="hl">'+esc(p.highlight)+'</div>':'')+
     '<button class="wishbtn'+(wishHas('poi',p.name,p.city||S.city)?' on':'')+'">'+
     (wishHas('poi',p.name,p.city||S.city)?'已想去':'想去')+'</button>';
   e.onclick=function(){cityFocus(p)};
@@ -3089,8 +4044,8 @@ function openAdd(){
   var rest=all.filter(function(p){return !used[p.id]});
   $('sheetBox').innerHTML='<h2>加个地方</h2><div class="d">从候选池里挑,加入后会自动重排顺序</div>'+
     (rest.length?rest.map(function(p){
-      return '<div class="li" data-id="'+p.id+'"><div><div class="n">'+p.name+'</div><div class="m">'+p.type+' · '+p.tags.join(' / ')+'</div></div>'+
-        '<span class="r">'+p.rating.toFixed(1)+'</span><span class="a">加入</span></div>';
+      return '<div class="li" data-id="'+esc(p.id)+'"><div><div class="n">'+esc(p.name)+'</div><div class="m">'+esc(p.type)+' · '+esc((p.tags||[]).join(' / '))+'</div></div>'+
+        '<span class="r">'+Number(p.rating||0).toFixed(1)+'</span><span class="a">加入</span></div>';
     }).join(''):'<div class="d">候选池已用完</div>');
   $('sheetBox').querySelectorAll('.li').forEach(function(e){
     e.onclick=function(){
@@ -3162,9 +4117,10 @@ function sendChat(){
       savePlan();renderTrip();if(mapOn())renderMap();
       var after=S.plan.days.map(function(x){return (x.items||[]).map(function(p){return p.name}).join(' → ')});
       var diff='<span class="diff">'+before.map(function(b,i){
-        return '第'+(i+1)+'天 '+b+(after[i]&&after[i]!==b?' → <b>'+after[i]+'</b>':(after[i]?'':' → (已清空)'));
+        return '第'+(i+1)+'天 '+esc(b)+(after[i]&&after[i]!==b?' → <b>'+esc(after[i])+'</b>':(after[i]?'':' → (已清空)'));
       }).join('<br>')+'</span>';
-      chatLog(d.reply||'已按你的意见重排。','ai',(d.reply||'已按你的意见重排。')+diff);
+      // before/after 里是景点名,d.reply 是大模型原样返回的话 —— 拼进 innerHTML 前一律转义
+      chatLog(d.reply||'已按你的意见重排。','ai',esc(d.reply||'已按你的意见重排。')+diff);
       if(!d.by_model)chatLog('提示:这次是本地规则兜底,没接大模型,只能做很粗的调整。','sys');
     })
     .catch(function(){wait.remove();chatLog('网络出错了,稍后再试。','ai')})
@@ -3496,46 +4452,70 @@ function renderMapDayCtl(){
   });
 }
 
-/* 全城地图:视角(俯视/旋转) + 底图(卫星/街道·交通图) */
+/* 漫画简图开关。切模式是整张图重画(两种模式的渲染器完全不同,没有"局部切换"这回事)。 */
+function setCute(on){
+  S.cute=!!on; CUTE.pick=null;
+  try{localStorage.setItem('tm_cute',S.cute?'1':'0')}catch(e){}
+  renderCity();
+}
+/* chip 的选中/显隐跟着当前模式走:非试点城市把「漫画」藏起来,漫画模式下「转 30°」没有意义 */
+function syncCityCtl(){
+  var ctl=$('cityViewCtl');if(!ctl)return;
+  var cute=cuteOn();
+  ctl.querySelectorAll('.chip').forEach(function(x){
+    var b=x.getAttribute('data-b'),v=x.getAttribute('data-v');
+    if(b==='cute'){
+      x.style.display=cuteAvail()?'':'none';
+      if(cute)x.classList.add('on');else x.classList.remove('on');
+    }else if(b){
+      if(!cute&&S.base===b)x.classList.add('on');else x.classList.remove('on');
+    }else if(v==='rot'){
+      x.style.display=cute?'none':'';      // 手绘简图转不了,留着只会点了没反应
+    }
+  });
+}
+
+/* 全城地图:视角(旋转) + 底图(卫星/街道·交通图) + 漫画简图。俯视chip已去掉 —— 地图本来就默认垂直俯瞰 */
 $('cityViewCtl').querySelectorAll('.chip').forEach(function(c){
   c.onclick=function(){
     var v=c.getAttribute('data-v'),b=c.getAttribute('data-b');
-    if(!CMAP.map){toast('地图还没加载好');return}
+    if(b==='cute'){
+      if(!cuteAvail()){toast('漫画简图正在西安试点,别的城市还没开放');return}
+      setCute(!cuteOn());
+      return;
+    }
     if(b){
-      $('cityViewCtl').querySelectorAll('.chip[data-b]').forEach(function(x){x.classList.remove('on')});
+      // 卫星/街道和漫画互斥:选了真实底图就退出漫画。漫画模式下没有地图实例,要重建。
+      if(cuteOn()){setCute(false);return}
+      if(!CMAP.map){toast('地图还没加载好');return}
+      $('cityViewCtl').querySelectorAll('.chip[data-b]').forEach(function(x){
+        if(x.getAttribute('data-b')!=='cute')x.classList.remove('on');
+      });
       c.classList.add('on'); S.base=b;
       if(CMAP.eng==='ml')setMLBase(b); else setBaseMap(CMAP.map,b);
       afterCityMap(shownPois());
       return;
     }
     if(v==='rot'){
+      if(!CMAP.map){toast('漫画简图不支持旋转');return}
       CMAP.rot=((CMAP.rot||0)+30)%360;
       if(CMAP.eng==='ml'){try{CMAP.map.setBearing(CMAP.rot)}catch(e){toast('这个底图版本不支持旋转')}}
       else {try{CMAP.map.setRotation(CMAP.rot)}catch(e){toast('这个底图版本不支持旋转')}}
-      return;
     }
-    $('cityViewCtl').querySelectorAll('.chip[data-v]').forEach(function(x){
-      if(x.getAttribute('data-v')!=='rot')x.classList.remove('on')});
-    c.classList.add('on');
-    if(CMAP.eng==='ml')CMAP.map.setPitch(0);   // 俯视:垂直俯瞰
-    else CMAP.map.setPitch(0);
   };
 });
 
-/* 路线页:视角(三维/俯视) + 底图(卫星/街道) */
+/* 路线页:底图(卫星/街道)。俯视chip已去掉,地图构造时 pitch 就是 0 */
 $('mapCtl').querySelectorAll('.chip').forEach(function(c){
   c.onclick=function(){
     var b=c.getAttribute('data-b');
-    if(b){
-      $('mapCtl').querySelectorAll('.chip[data-b]').forEach(function(x){x.classList.remove('on')});
-      c.classList.add('on');
-      S.base=b;setBaseMap(MAP.map,b);
-      $('mapSub').textContent=b==='sat'?'卫星实景 · 点标记可查看名称':'街道 · 点标记可查看名称';
-      return;
-    }
-    $('mapCtl').querySelectorAll('.chip[data-pitch]').forEach(function(x){x.classList.remove('on')});
+    if(!b)return;
+    $('mapCtl').querySelectorAll('.chip[data-b]').forEach(function(x){x.classList.remove('on')});
     c.classList.add('on');
-    if(MAP.map)MAP.map.setPitch(parseFloat(c.getAttribute('data-pitch')));
+    S.base=b;
+    if(MAP.eng==='ml'){ setRouteBase(b); }
+    else setBaseMap(MAP.map,b);
+    $('mapSub').textContent=b==='sat'?'卫星实景 · 按行程顺序连线':'街道 · 按行程顺序连线';
   };
 });
 
@@ -3549,6 +4529,7 @@ syncSticky();
 
 renderHome();probe();
 try{S.stay=readStay(S.city)}catch(e){}      // 上次的落脚点,进页面就恢复
+try{var _c=localStorage.getItem('tm_cute');if(_c!==null)S.cute=(_c==='1')}catch(e){}   // 漫画简图上次的选择
 renderStay();
 initDense();          // 上次选的「紧凑 / 详细」要带回来
 initTune();           // 调参条是展开还是收起,也记一下

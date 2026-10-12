@@ -299,6 +299,30 @@ def city_boundary(city: str):
     return {"city": city, "boundary": geo}
 
 
+@app.get("/api/route")
+def route_path(city: str, pts: str):
+    """行程路线折线(导航式贴路路线)。
+
+    pts 是 'lng,lat;lng,lat;...'(GCJ-02,即高德 POI 原坐标,按行程先后顺序)。
+    返回 {"ok":true,"path":[[lng,lat],...]}(GCJ-02,前端再 gcj02ToWgs84 画到 WGS-84 底图);
+    拿不到真实道路时 {"ok":false},前端退化为直线段,不会白屏。
+    """
+    try:
+        seq = []
+        for part in (pts or "").split(";"):
+            part = part.strip()
+            if not part:
+                continue
+            lng, lat = (float(x) for x in part.split(","))
+            seq.append([lng, lat])
+        if len(seq) < 2:
+            return {"ok": False, "reason": "points<2"}
+        path = amap.route_path_all(seq, city or "")
+        return {"ok": True, "path": path, "live": amap.LIVE}
+    except Exception as e:
+        return {"ok": False, "reason": str(e)}
+
+
 # 本地第三方前端库(如 MapLibre GL JS,用于真三维地形)。先于此挂载的静态根,优先匹配
 @app.get("/vendor/{file:path}")
 def vendor_file(file: str):
